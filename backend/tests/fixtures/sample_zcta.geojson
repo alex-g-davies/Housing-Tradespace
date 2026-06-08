@@ -1,0 +1,17 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "zip": "98101" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-122.345, 47.600], [-122.325, 47.600], [-122.325, 47.620], [-122.345, 47.620], [-122.345, 47.600]]] } },
+    { "type": "Feature", "properties": { "zip": "98109" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-122.355, 47.620], [-122.330, 47.620], [-122.330, 47.640], [-122.355, 47.640], [-122.355, 47.620]]] } },
+    { "type": "Feature", "properties": { "zip": "98103" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-122.360, 47.655], [-122.325, 47.655], [-122.325, 47.685], [-122.360, 47.685], [-122.360, 47.655]]] } },
+    { "type": "Feature", "properties": { "zip": "98112" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-122.320, 47.620], [-122.285, 47.620], [-122.285, 47.650], [-122.320, 47.650], [-122.320, 47.620]]] } },
+    { "type": "Feature", "properties": { "ZCTA5CE20": "98115" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-122.325, 47.670], [-122.285, 47.670], [-122.285, 47.700], [-122.325, 47.700], [-122.325, 47.670]]] } },
+    { "type": "Feature", "properties": { "zip": "ZZZ" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-122.0, 47.0], [-122.0, 47.1], [-121.9, 47.1], [-122.0, 47.0]]] } }
+  ]
+}

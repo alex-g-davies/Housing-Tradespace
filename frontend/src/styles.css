@@ -1,0 +1,151 @@
+:root {
+  --panel-bg: rgba(255, 255, 255, 0.94);
+  --ink: #1a2230;
+  --muted: #5b6675;
+  --border: #e2e6ec;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root,
+.app {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.app {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Floating control panel */
+.panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  width: 240px;
+  padding: 16px 18px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(20, 30, 50, 0.12);
+  color: var(--ink);
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.panel-subtitle {
+  margin: 2px 0 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.panel-foot {
+  margin: 14px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Budget input */
+.budget-input {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.budget-input__label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.budget-input__field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.budget-input__field input {
+  border: none;
+  outline: none;
+  font-size: 15px;
+  width: 100%;
+  color: var(--ink);
+}
+
+/* Legend */
+.legend-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  flex: none;
+}
+
+.legend-swatch--faded {
+  background: #6baed6;
+  opacity: 0.15;
+}
+
+/* Status toasts */
+.status {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 8px 14px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.status--error {
+  border-color: #f3b4b4;
+  color: #a12626;
+}

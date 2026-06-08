@@ -1,0 +1,13 @@
+{
+  "metro": "Seattle, WA",
+  "as_of": "2024-12-31",
+  "zips": [
+    { "zip": "98101", "median_value": 720000 },
+    { "zip": 98109, "median_value": 890000 },
+    { "zip": "98103", "median_value": 950000 },
+    { "zip": "98112", "median_value": 1250000 },
+    { "zip": "ABCDE", "median_value": 500000 },
+    { "zip": "98115", "median_value": null },
+    { "zip": "98199", "median_value": -5 }
+  ]
+}

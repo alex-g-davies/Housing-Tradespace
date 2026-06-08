@@ -1,0 +1,68 @@
+# Spec 001 — Affordability + Commute Map (MVP)
+
+Status: Draft
+Owner: <you>
+Related: none (first feature)
+
+## Overview
+
+Given a work location and a budget, show a Seattle-metro map that shades each
+ZIP code by median home value and overlays a drive-time isochrone from the work
+location, so a user can see at a glance which areas are both **affordable** and
+**commutable**. The goal of this MVP is to prove the full pipeline end to end —
+data in, two map layers out — not to be feature-complete.
+
+## Context
+
+- The app is market-level, not listing-level: it visualizes aggregate values by
+  area, not individual properties.
+- Two distinct contour fields are involved:
+  - *Commute contours* (isochrones) come from the Mapbox Isochrone API.
+  - The *cost surface* is derived by the app; for the MVP it is just the
+    per-ZIP median value (a true blended surface is a later spec).
+- Housing values come from a free aggregate dataset (Zillow ZHVI or Redfin
+  Data Center), preprocessed to a small per-ZIP file.
+
+## Requirements
+
+- **R1 — Load housing data.** Load median home value by ZIP for the Seattle
+  metro from a static, committed dataset.
+  - Expected: backend exposes the per-ZIP values; missing/invalid ZIPs are
+    skipped, not fatal.
+- **R2 — Price choropleth.** Render a map where each ZIP's fill color encodes
+  its median home value, with a legend.
+- **R3 — Commute isochrone.** Given a hard-coded work lat/long, fetch a 30-min
+  driving isochrone and overlay it as a contour on the map.
+- **R4 — Budget filter.** Given a budget input, visually distinguish ZIPs at or
+  under budget from those over budget.
+- **R5 — Key safety.** The Mapbox token is used server-side only; it never
+  appears in the frontend bundle or any client-side request.
+
+## Non-functional / Constraints
+
+- Use only free/aggregate housing data; no listing-level scraping.
+- Initial map render < 2s on typical broadband.
+- Scope is a single metro (Seattle) and a single hard-coded work location.
+
+## Acceptance Criteria
+
+- [ ] Loading the page shows the Seattle ZIP choropleth with a color legend.
+- [ ] Entering a budget visibly greys out (or de-emphasizes) over-budget ZIPs.
+- [ ] A 30-minute driving isochrone is visible and bounded by the road network
+      (not a circle).
+- [ ] The browser Network tab shows no Mapbox token in any client request.
+- [ ] `pytest` passes for the backend; `npm run test` passes for the frontend.
+
+## Out of Scope (explicit)
+
+- Optimization and forecasting.
+- A blended price+commute cost surface.
+- Multiple metros; user-entered (dynamic) work location.
+- Public-transit commute mode.
+- User accounts or any persisted personal data.
+
+## Verification notes
+
+Each acceptance criterion traces to a requirement: choropleth → R1/R2, isochrone
+→ R3, budget shading → R4, key absence → R5. Verify by walking this list
+manually; the implementing agent does not self-certify done.
