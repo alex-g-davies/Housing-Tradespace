@@ -11,6 +11,7 @@ import {
   MAP_CENTER,
   MAP_ZOOM,
   OVER_BUDGET_OPACITY,
+  type WorkLocation,
 } from "../config";
 import { fillColorExpression, fillOpacityExpression } from "../lib/colorScale";
 
@@ -18,16 +19,25 @@ interface Props {
   geojson: FeatureCollection | null;
   isochrone: FeatureCollection | null;
   budget: number;
+  work: WorkLocation;
+  onWorkChange: (lat: number, lon: number) => void;
 }
 
 const ZIP_SOURCE = "zips";
 const ISO_SOURCE = "isochrone";
 
-export default function MapView({ geojson, isochrone, budget }: Props) {
+export default function MapView({ geojson, isochrone, budget, work, onWorkChange }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const loaded = useRef(false);
   const marker = useRef<maplibregl.Marker | null>(null);
+
+  // Keep the latest callback + work in refs so the map handlers (bound once on
+  // load) never call a stale closure.
+  const onWorkChangeRef = useRef(onWorkChange);
+  onWorkChangeRef.current = onWorkChange;
+  const workRef = useRef(work);
+  workRef.current = work;
 
   // Create the map once.
   useEffect(() => {
@@ -39,6 +49,22 @@ export default function MapView({ geojson, isochrone, budget }: Props) {
       zoom: MAP_ZOOM,
     });
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+
+    // Draggable work-location pin; dragging or clicking the map moves it and
+    // triggers an isochrone refetch upstream.
+    const pin = new maplibregl.Marker({ color: ISOCHRONE_LINE, draggable: true })
+      .setLngLat([workRef.current.lon, workRef.current.lat])
+      .setPopup(new maplibregl.Popup({ closeButton: false }).setText("Work location"))
+      .addTo(m);
+    pin.on("dragend", () => {
+      const p = pin.getLngLat();
+      onWorkChangeRef.current(p.lat, p.lng);
+    });
+    marker.current = pin;
+
+    m.on("click", (e) => onWorkChangeRef.current(e.lngLat.lat, e.lngLat.lng));
+    m.getCanvas().style.cursor = "crosshair";
+
     m.on("load", () => {
       loaded.current = true;
       syncZips();
@@ -48,6 +74,7 @@ export default function MapView({ geojson, isochrone, budget }: Props) {
     return () => {
       m.remove();
       map.current = null;
+      marker.current = null;
       loaded.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,42 +111,38 @@ export default function MapView({ geojson, isochrone, budget }: Props) {
     });
   }
 
-  // Commute isochrone overlay + work-location marker.
+  // Commute isochrone overlay (the work pin is managed separately).
   function syncIsochrone() {
     const m = map.current;
     if (!m || !loaded.current || !isochrone) return;
     const existing = m.getSource(ISO_SOURCE) as maplibregl.GeoJSONSource | undefined;
     if (existing) {
       existing.setData(isochrone as never);
-    } else {
-      m.addSource(ISO_SOURCE, { type: "geojson", data: isochrone as never });
-      m.addLayer({
-        id: "iso-fill",
-        type: "fill",
-        source: ISO_SOURCE,
-        paint: { "fill-color": ISOCHRONE_FILL, "fill-opacity": 0.18 },
-      });
-      m.addLayer({
-        id: "iso-line",
-        type: "line",
-        source: ISO_SOURCE,
-        paint: { "line-color": ISOCHRONE_LINE, "line-width": 2 },
-      });
+      return;
     }
-    // Place the work-location marker if the collection carries a work point.
-    const work = (isochrone as { properties?: { work?: { lat: number; lon: number } } })
-      .properties?.work;
-    if (work && !marker.current) {
-      marker.current = new maplibregl.Marker({ color: ISOCHRONE_LINE })
-        .setLngLat([work.lon, work.lat])
-        .setPopup(new maplibregl.Popup().setText("Work location"))
-        .addTo(m);
-    }
+    m.addSource(ISO_SOURCE, { type: "geojson", data: isochrone as never });
+    m.addLayer({
+      id: "iso-fill",
+      type: "fill",
+      source: ISO_SOURCE,
+      paint: { "fill-color": ISOCHRONE_FILL, "fill-opacity": 0.18 },
+    });
+    m.addLayer({
+      id: "iso-line",
+      type: "line",
+      source: ISO_SOURCE,
+      paint: { "line-color": ISOCHRONE_LINE, "line-width": 2 },
+    });
   }
 
   // Re-sync layers when data arrives.
   useEffect(syncZips, [geojson]);
   useEffect(syncIsochrone, [isochrone]);
+
+  // Reflect external work-location changes (e.g. the reset button) on the pin.
+  useEffect(() => {
+    marker.current?.setLngLat([work.lon, work.lat]);
+  }, [work.lat, work.lon]);
 
   // Budget changes only repaint opacity — no data mutation (R4).
   useEffect(() => {

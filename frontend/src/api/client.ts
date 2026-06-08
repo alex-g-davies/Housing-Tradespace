@@ -26,4 +26,5 @@ export const getHousing = () => getJson<HousingResponse>("/housing");
 
 export const getZipsGeojson = () => getJson<FeatureCollection>("/zips.geojson");
 
-export const getIsochrone = () => getJson<FeatureCollection>("/isochrone");
+export const getIsochrone = (lat: number, lon: number) =>
+  getJson<FeatureCollection>(`/isochrone?lat=${lat}&lon=${lon}`);

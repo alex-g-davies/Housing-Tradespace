@@ -23,8 +23,10 @@ class Settings(BaseSettings):
     """
 
     mapbox_token: str = ""
-    work_lat: float = 47.6062
-    work_lon: float = -122.3321
+    # Default work location: the Museum of Flight, Seattle. Used when the client
+    # does not pass an explicit lat/lon (the frontend lets users move the point).
+    work_lat: float = 47.5180
+    work_lon: float = -122.2966
     contour_minutes: int = 30
     use_fixture: bool = False
 

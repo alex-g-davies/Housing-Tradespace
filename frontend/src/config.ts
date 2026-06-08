@@ -15,6 +15,14 @@ export const BASEMAP_STYLE_URL =
 export const MAP_CENTER: [number, number] = [-122.33, 47.64];
 export const MAP_ZOOM = 10.2;
 
+// Default work location the commute isochrone starts from. Users can move it by
+// dragging the pin or clicking the map.
+export interface WorkLocation {
+  lat: number;
+  lon: number;
+}
+export const DEFAULT_WORK: WorkLocation = { lat: 47.518, lon: -122.2966 }; // Museum of Flight, Seattle
+
 // Sequential ramp keyed on median home value (USD). Ascending stops; cool->deep
 // reads as "more expensive". Shared by the map fill and the legend swatches.
 export interface ColorStop {

@@ -3,7 +3,9 @@
 Decide where you could live by overlaying **housing cost** and **commute time**.
 The MVP (spec [`specs/001-mvp`](specs/001-mvp)) renders a Seattle-metro map that
 shades each ZIP by median home value, de-emphasizes ZIPs over a budget, and
-overlays a 30-minute drive-time isochrone from a fixed work location.
+overlays a 30-minute drive-time isochrone from a work location you can move by
+dragging the pin or clicking the map (default: the Museum of Flight). Movable
+work location goes beyond spec 001's MVP scope.
 
 The map is the product: a FastAPI backend serves preprocessed aggregate data and
 proxies the (token-bearing) Mapbox Isochrone call; a React + MapLibre frontend
@@ -87,8 +89,9 @@ to `backend/data/isochrone_fixture.json`.
 1. Page load shows the ZIP choropleth + color legend. *(choropleth → R1/R2)*
 2. Entering a budget de-emphasizes over-budget ZIPs. *(→ R4)*
 3. The 30-min isochrone is visible and road-bounded — with a live token, not a
-   circle. *(→ R3)*
-4. The browser Network tab shows no Mapbox token in any client request. *(→ R5)*
+   circle. Dragging the pin / clicking the map moves it and refetches. *(→ R3)*
+4. The browser Network tab shows no Mapbox token in any client request — only
+   `/api/isochrone?lat=…&lon=…` to your own origin. *(→ R5)*
 5. `pytest` (backend) and `npm run test` (frontend) pass.
 
 The human walks this list against the running app; the implementer does not

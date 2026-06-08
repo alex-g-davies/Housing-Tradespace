@@ -93,6 +93,49 @@ body,
   color: var(--ink);
 }
 
+/* Work-location control */
+.work {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.work__label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.work__coords {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.work__reset {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.work__reset:hover {
+  border-color: #c3cad4;
+}
+
+.work__hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* Legend */
 .legend-title {
   font-size: 12px;

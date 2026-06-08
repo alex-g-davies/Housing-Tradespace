@@ -8,7 +8,7 @@ import json
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from ..config import DATA_DIR, Settings, get_settings
@@ -25,34 +25,43 @@ router = APIRouter(prefix="/api", tags=["isochrone"])
 FIXTURE_FILE = "isochrone_fixture.json"
 
 
-def _load_fixture(settings: Settings) -> dict:
-    """Serve the committed isochrone fixture, re-wrapped for the current work
-    location so the overlay renders without a Mapbox token (fixture-first)."""
+def _load_fixture(settings: Settings, lat: float, lon: float) -> dict:
+    """Serve the committed isochrone fixture, re-wrapped for the requested work
+    location so the overlay renders without a Mapbox token (fixture-first). The
+    fixture geometry is fixed; only the reported work point follows the request."""
     with open(DATA_DIR / FIXTURE_FILE, encoding="utf-8") as f:
         raw = json.load(f)
     features = strip_mapbox_props(raw, settings.contour_minutes)
-    return build_collection(
-        features, lat=settings.work_lat, lon=settings.work_lon, minutes=settings.contour_minutes
-    )
+    return build_collection(features, lat=lat, lon=lon, minutes=settings.contour_minutes)
 
 
 @router.get("/isochrone")
-def get_isochrone(settings: Settings = Depends(get_settings)) -> JSONResponse:
+def get_isochrone(
+    lat: float | None = Query(None, ge=-90, le=90, description="Work latitude"),
+    lon: float | None = Query(None, ge=-180, le=180, description="Work longitude"),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """30-min driving isochrone from the work location. The client may pass a
+    lat/lon to move the point (the token still never leaves the backend — R5);
+    omitting them falls back to the configured default."""
+    work_lat = lat if lat is not None else settings.work_lat
+    work_lon = lon if lon is not None else settings.work_lon
+
     if settings.serve_fixture:
-        return JSONResponse(content=_load_fixture(settings))
+        return JSONResponse(content=_load_fixture(settings, work_lat, work_lon))
 
     try:
         payload = fetch_isochrone(
             token=settings.mapbox_token,
-            lat=settings.work_lat,
-            lon=settings.work_lon,
+            lat=work_lat,
+            lon=work_lon,
             minutes=settings.contour_minutes,
         )
         return JSONResponse(content=payload)
     except httpx.HTTPError:
         # Never leak the token (which lives in the request URL) into the error.
         logger.warning("Isochrone upstream call failed", exc_info=False)
-        stale = cached_isochrone(settings.work_lat, settings.work_lon, settings.contour_minutes)
+        stale = cached_isochrone(work_lat, work_lon, settings.contour_minutes)
         if stale is not None:
             return JSONResponse(content=stale)
         raise HTTPException(status_code=503, detail="isochrone upstream unavailable") from None

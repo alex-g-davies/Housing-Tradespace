@@ -21,9 +21,12 @@ describe("api client (R5 — token never client-side)", () => {
     const f = mockFetch();
     await getHousing();
     await getZipsGeojson();
-    await getIsochrone();
+    await getIsochrone(47.518, -122.2966);
     const urls = f.mock.calls.map((c) => String(c[0]));
-    expect(urls).toEqual(["/api/housing", "/api/zips.geojson", "/api/isochrone"]);
+    expect(urls[0]).toBe("/api/housing");
+    expect(urls[1]).toBe("/api/zips.geojson");
+    // Isochrone carries only the work lat/lon — never a Mapbox token.
+    expect(urls[2]).toBe("/api/isochrone?lat=47.518&lon=-122.2966");
     for (const url of urls) {
       expect(url).not.toContain("mapbox");
       expect(url).not.toContain("access_token");

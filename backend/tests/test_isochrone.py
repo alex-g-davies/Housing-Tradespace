@@ -69,3 +69,23 @@ def test_upstream_failure_returns_503_without_token(make_client, httpx_mock):
     assert r.status_code == 503
     assert TOKEN not in r.text
     assert r.json()["detail"] == "isochrone upstream unavailable"
+
+
+def test_explicit_latlon_is_passed_to_mapbox(make_client, httpx_mock, mapbox_response):
+    """A client-supplied work point reaches Mapbox (lon,lat order) and is echoed
+    back in the response — while the token still never leaves the backend (R5)."""
+    httpx_mock.add_response(json=mapbox_response)
+    client = make_client(mapbox_token=TOKEN)
+
+    r = client.get("/api/isochrone", params={"lat": 47.518, "lon": -122.2966})
+    assert r.status_code == 200
+    url = str(httpx_mock.get_requests()[0].url)
+    assert "/driving/-122.2966,47.518" in url  # Mapbox uses lon,lat
+    assert TOKEN in url and TOKEN not in r.text
+    assert r.json()["properties"]["work"] == {"lat": 47.518, "lon": -122.2966}
+
+
+def test_out_of_range_latlon_rejected(make_client):
+    client = make_client(mapbox_token=TOKEN)
+    assert client.get("/api/isochrone", params={"lat": 999, "lon": 0}).status_code == 422
+    assert client.get("/api/isochrone", params={"lat": 47.5, "lon": 999}).status_code == 422
