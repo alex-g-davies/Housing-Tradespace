@@ -78,8 +78,14 @@ monthly columns), plus optional **$/sqft** from Redfin.
 cd backend
 .\.venv\Scripts\python.exe scripts\build_data.py            # ZHVI + ZCTA -> data/
 .\.venv\Scripts\python.exe scripts\build_data.py --redfin-url   # also add $/sqft (large DL)
+.\.venv\Scripts\python.exe scripts\build_data.py --clip-existing # re-trim ZIPs to land
 .\.venv\Scripts\python.exe scripts\build_data.py --help     # options
 ```
+
+ZIP polygons are **trimmed to land** (water subtracted) so the choropleth doesn't
+flood Puget Sound / Lake Washington; islands the coarse mask can't resolve (e.g.
+Mercer Island) keep their original outline. Use `--no-water-clip` to skip, or
+`--clip-existing` to re-trim the committed GeoJSON without re-downloading.
 
 Sources (free / aggregate):
 
@@ -87,6 +93,9 @@ Sources (free / aggregate):
   (ZHVI is smoothed/seasonally adjusted and may **restate** prior months on
   re-download, so historical YoY/CAGR can shift slightly between builds.)
 - **ZCTA ZIP boundaries** — © U.S. Census Bureau (via the OpenDataDE mirror).
+- **Natural Earth** `ne_10m_ocean` + `ne_10m_lakes_north_america` (public domain)
+  — water mask for trimming ZIPs to land. Lake Sammamish / small water remain
+  (1:10m resolution).
 - **Redfin** `zip_code_market_tracker` — `MEDIAN_PPSF` (median **sold** price per
   square foot, All Residential) for `$/sqft`. © Redfin Data Center. **Optional**
   and **large** (>4 GB uncompressed): off unless you pass

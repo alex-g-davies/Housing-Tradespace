@@ -6,6 +6,7 @@ import importlib.util
 from pathlib import Path
 
 import pandas as pd
+from shapely.geometry import MultiPolygon, Point, box
 
 _PATH = Path(__file__).resolve().parent.parent / "scripts" / "build_data.py"
 _spec = importlib.util.spec_from_file_location("build_data", _PATH)
@@ -61,3 +62,30 @@ def test_build_redfin_picks_latest_all_residential_ppsf(tmp_path):
 
     out = build_data.build_redfin(str(path), {"98103", "98199"})
     assert out == {"98103": 640.0}  # latest period, All Residential, in-set, non-null
+
+
+def test_clip_to_land_removes_water_half():
+    zip_poly = box(0, 0, 1, 1)  # 1.0 deg^2
+    water = box(0.5, 0, 1.5, 1)  # covers the right half
+    out = build_data.clip_to_land(zip_poly, water, sliver_min=1e-6, tolerance=0)
+    assert out is not None
+    assert abs(out.area - 0.5) < 1e-9  # only the land (left) half remains
+    assert out.contains(Point(0.25, 0.5))
+    assert not out.contains(Point(0.75, 0.5))  # water side removed
+
+
+def test_clip_to_land_drops_sub_threshold_slivers():
+    land = box(0, 0, 1, 1)  # area 1.0
+    sliver = box(2, 2, 2.001, 2.001)  # area 1e-6, below threshold
+    out = build_data.clip_to_land(MultiPolygon([land, sliver]), None, sliver_min=1e-4, tolerance=0)
+    assert out.geom_type == "Polygon"  # sliver dropped -> single polygon
+    assert abs(out.area - 1.0) < 1e-9
+
+
+def test_clip_to_land_keeps_island_fully_inside_water():
+    # A ZIP fully covered by the coarse water mask is an island the mask can't
+    # cut out (e.g. Mercer Island) -> keep the original rather than delete it.
+    island = box(0, 0, 1, 1)
+    out = build_data.clip_to_land(island, box(-1, -1, 2, 2), tolerance=0)
+    assert out is not None
+    assert abs(out.area - 1.0) < 1e-9
