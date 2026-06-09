@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import housing, isochrone
+from .routers import geocode, housing, isochrone
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,6 +25,7 @@ app.add_middleware(
 
 app.include_router(housing.router)
 app.include_router(isochrone.router)
+app.include_router(geocode.router)
 
 
 @app.get("/api/health")

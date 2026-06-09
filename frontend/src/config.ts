@@ -33,8 +33,8 @@ export interface ColorStop {
 // Breaks chosen to spread the bulk of the metro (most ZIPs fall 450k–1.8M);
 // values above the top stop clamp to the darkest color.
 export const COLOR_STOPS: ColorStop[] = [
-  { value: 450_000, color: "#eff3ff" },
-  { value: 700_000, color: "#bdd7e7" },
+  { value: 450_000, color: "#c6dbef" },
+  { value: 700_000, color: "#9ecae1" },
   { value: 950_000, color: "#6baed6" },
   { value: 1_300_000, color: "#3182bd" },
   { value: 1_800_000, color: "#08519c" },

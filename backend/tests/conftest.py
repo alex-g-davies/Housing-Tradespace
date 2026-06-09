@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app import geocode as geo_module
 from app import isochrone as iso_module
 from app.config import Settings, get_settings
 from app.data_loader import DataStore, get_data_store, merge_geojson, parse_housing
@@ -29,10 +30,12 @@ def _make_settings(**overrides) -> Settings:
 
 
 @pytest.fixture(autouse=True)
-def _clear_iso_cache():
+def _clear_caches():
     iso_module.clear_cache()
+    geo_module.clear_cache()
     yield
     iso_module.clear_cache()
+    geo_module.clear_cache()
 
 
 @pytest.fixture

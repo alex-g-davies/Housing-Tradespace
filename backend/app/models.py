@@ -13,3 +13,9 @@ class HousingResponse(BaseModel):
     currency: str = "USD"
     as_of: str
     zips: list[ZipValue]
+
+
+class GeocodeResult(BaseModel):
+    lat: float
+    lon: float
+    place_name: str

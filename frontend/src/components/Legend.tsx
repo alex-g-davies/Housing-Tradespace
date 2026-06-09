@@ -1,11 +1,8 @@
 import { COLOR_STOPS, NO_DATA_COLOR } from "../config";
+import { formatUsdCompact as formatK } from "../lib/format";
 
 interface Props {
   budget: number;
-}
-
-function formatK(value: number): string {
-  return `$${Math.round(value / 1000)}k`;
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   type WorkLocation,
 } from "../config";
 import { fillColorExpression, fillOpacityExpression } from "../lib/colorScale";
+import { formatUsd } from "../lib/format";
 
 interface Props {
   geojson: FeatureCollection | null;
@@ -21,23 +22,42 @@ interface Props {
   budget: number;
   work: WorkLocation;
   onWorkChange: (lat: number, lon: number) => void;
+  /** Increment to fly the map to the current work location (address / reset). */
+  recenterSignal: number;
 }
 
 const ZIP_SOURCE = "zips";
 const ISO_SOURCE = "isochrone";
+const ZIP_FILL = "zip-fill";
 
-export default function MapView({ geojson, isochrone, budget, work, onWorkChange }: Props) {
+export default function MapView({
+  geojson,
+  isochrone,
+  budget,
+  work,
+  onWorkChange,
+  recenterSignal,
+}: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const loaded = useRef(false);
   const marker = useRef<maplibregl.Marker | null>(null);
+  const infoPopup = useRef<maplibregl.Popup | null>(null);
 
-  // Keep the latest callback + work in refs so the map handlers (bound once on
-  // load) never call a stale closure.
+  // Keep the latest props in refs so the sync functions — which may be invoked
+  // from the once-bound "load" handler with a stale closure — always read the
+  // current data. Without this, a geojson that arrives before the basemap
+  // finishes loading is dropped and the choropleth never renders.
   const onWorkChangeRef = useRef(onWorkChange);
   onWorkChangeRef.current = onWorkChange;
   const workRef = useRef(work);
   workRef.current = work;
+  const geojsonRef = useRef(geojson);
+  geojsonRef.current = geojson;
+  const isochroneRef = useRef(isochrone);
+  isochroneRef.current = isochrone;
+  const budgetRef = useRef(budget);
+  budgetRef.current = budget;
 
   // Create the map once.
   useEffect(() => {
@@ -62,8 +82,31 @@ export default function MapView({ geojson, isochrone, budget, work, onWorkChange
     });
     marker.current = pin;
 
-    m.on("click", (e) => onWorkChangeRef.current(e.lngLat.lat, e.lngLat.lng));
-    m.getCanvas().style.cursor = "crosshair";
+    // Hover/tap a ZIP to show its median value. Layer-scoped handlers fire only
+    // for the zip-fill layer and work even though it's added after this binding.
+    const info = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
+    infoPopup.current = info;
+    const showInfo = (e: maplibregl.MapLayerMouseEvent) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      m.getCanvas().style.cursor = "pointer";
+      const props = (f.properties ?? {}) as { zip?: string; median_value?: number };
+      const value =
+        props.median_value != null ? formatUsd(props.median_value) : "No price data";
+      info
+        .setLngLat(e.lngLat)
+        .setHTML(
+          `<div class="tip"><div class="tip__zip">ZIP ${props.zip ?? "—"}</div>` +
+            `<div class="tip__val">${value}</div></div>`,
+        )
+        .addTo(m);
+    };
+    m.on("mousemove", ZIP_FILL, showInfo);
+    m.on("click", ZIP_FILL, showInfo);
+    m.on("mouseleave", ZIP_FILL, () => {
+      m.getCanvas().style.cursor = "";
+      info.remove();
+    });
 
     m.on("load", () => {
       loaded.current = true;
@@ -75,6 +118,7 @@ export default function MapView({ geojson, isochrone, budget, work, onWorkChange
       m.remove();
       map.current = null;
       marker.current = null;
+      infoPopup.current = null;
       loaded.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,21 +127,22 @@ export default function MapView({ geojson, isochrone, budget, work, onWorkChange
   // Choropleth: add or update the source + fill/border layers.
   function syncZips() {
     const m = map.current;
-    if (!m || !loaded.current || !geojson) return;
+    const data = geojsonRef.current;
+    if (!m || !loaded.current || !data) return;
     const existing = m.getSource(ZIP_SOURCE) as maplibregl.GeoJSONSource | undefined;
     if (existing) {
-      existing.setData(geojson as never);
+      existing.setData(data as never);
       return;
     }
-    m.addSource(ZIP_SOURCE, { type: "geojson", data: geojson as never });
+    m.addSource(ZIP_SOURCE, { type: "geojson", data: data as never });
     m.addLayer({
-      id: "zip-fill",
+      id: ZIP_FILL,
       type: "fill",
       source: ZIP_SOURCE,
       paint: {
         "fill-color": fillColorExpression() as never,
         "fill-opacity": fillOpacityExpression(
-          budget,
+          budgetRef.current,
           IN_BUDGET_OPACITY,
           OVER_BUDGET_OPACITY,
         ) as never,
@@ -114,13 +159,14 @@ export default function MapView({ geojson, isochrone, budget, work, onWorkChange
   // Commute isochrone overlay (the work pin is managed separately).
   function syncIsochrone() {
     const m = map.current;
-    if (!m || !loaded.current || !isochrone) return;
+    const data = isochroneRef.current;
+    if (!m || !loaded.current || !data) return;
     const existing = m.getSource(ISO_SOURCE) as maplibregl.GeoJSONSource | undefined;
     if (existing) {
-      existing.setData(isochrone as never);
+      existing.setData(data as never);
       return;
     }
-    m.addSource(ISO_SOURCE, { type: "geojson", data: isochrone as never });
+    m.addSource(ISO_SOURCE, { type: "geojson", data: data as never });
     m.addLayer({
       id: "iso-fill",
       type: "fill",
@@ -139,17 +185,29 @@ export default function MapView({ geojson, isochrone, budget, work, onWorkChange
   useEffect(syncZips, [geojson]);
   useEffect(syncIsochrone, [isochrone]);
 
-  // Reflect external work-location changes (e.g. the reset button) on the pin.
+  // Reflect external work-location changes (address / reset) on the pin.
   useEffect(() => {
     marker.current?.setLngLat([work.lon, work.lat]);
   }, [work.lat, work.lon]);
 
+  // Fly to the work location when asked (address search / reset). Skips the
+  // initial render (signal 0) so the map keeps its metro-wide opening view.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || recenterSignal === 0) return;
+    m.flyTo({
+      center: [workRef.current.lon, workRef.current.lat],
+      zoom: Math.max(m.getZoom(), 11),
+      duration: 800,
+    });
+  }, [recenterSignal]);
+
   // Budget changes only repaint opacity — no data mutation (R4).
   useEffect(() => {
     const m = map.current;
-    if (!m || !loaded.current || !m.getLayer("zip-fill")) return;
+    if (!m || !loaded.current || !m.getLayer(ZIP_FILL)) return;
     m.setPaintProperty(
-      "zip-fill",
+      ZIP_FILL,
       "fill-opacity",
       fillOpacityExpression(budget, IN_BUDGET_OPACITY, OVER_BUDGET_OPACITY) as never,
     );
