@@ -31,7 +31,7 @@ describe("CommuteControl (003)", () => {
   it("shows the scenario legend with per-band areas and the shrink summary", () => {
     render(<CommuteControl minutes={30} onMinutesChange={() => {}} variation={variation} />);
     expect(screen.getByText("Light traffic")).toBeInTheDocument();
-    expect(screen.getByText("Rush hour")).toBeInTheDocument();
+    expect(screen.getByText("Evening rush")).toBeInTheDocument();
     expect(screen.getByText("468 mi²")).toBeInTheDocument();
     expect(screen.getByText("298 mi²")).toBeInTheDocument();
     expect(screen.getByText(/36.2%/)).toBeInTheDocument();

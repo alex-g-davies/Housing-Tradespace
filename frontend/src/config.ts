@@ -132,5 +132,5 @@ export interface ScenarioStyle {
 export const SCENARIO_STYLES: ScenarioStyle[] = [
   { key: "offpeak", label: "Light traffic", line: "#2e7d32" },
   { key: "typical", label: "Midday", line: "#f9a825" },
-  { key: "peak", label: "Rush hour", line: "#c62828" },
+  { key: "peak", label: "Evening rush", line: "#c62828" },
 ];

@@ -306,6 +306,12 @@ body,
   color: var(--muted);
 }
 
+.commute__note {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* Metric switcher (segmented control) */
 .switcher {
   display: flex;

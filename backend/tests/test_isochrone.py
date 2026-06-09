@@ -5,8 +5,10 @@ import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
+from shapely.geometry import box
 
 from app.isochrone import (
+    enforce_nesting,
     geodesic_area_sqmi,
     next_departure,
     summarize_variation,
@@ -62,6 +64,23 @@ def test_geodesic_area_sqmi_positive_and_reasonable():
     assert 80 < area < 120
 
 
+def test_enforce_nesting_clips_inner_bands_to_outer():
+    # typical sits inside offpeak; peak BULGES outside both (raw peak > typical).
+    offpeak = box(0, 0, 10, 10)  # area 100
+    typical = box(1, 1, 9, 9)  # area 64
+    peak = box(2, 2, 12, 12)  # area 100 raw, but should clip to <= typical
+    out = enforce_nesting([("offpeak", offpeak), ("typical", typical), ("peak", peak)])
+    geoms = {scen: g for scen, g in out}
+
+    assert geoms["offpeak"].area == 100
+    assert geoms["typical"].area == 64
+    assert geoms["peak"].area == 49  # box(2,2,9,9) after chained clip
+    # strictly nested
+    assert geoms["peak"].area <= geoms["typical"].area <= geoms["offpeak"].area
+    assert geoms["typical"].covers(geoms["peak"])
+    assert geoms["offpeak"].covers(geoms["typical"])
+
+
 def test_summarize_variation_computes_peak_shrink():
     s = summarize_variation({"offpeak": 200.0, "typical": 150.0, "peak": 140.0})
     assert s["offpeak_sqmi"] == 200.0 and s["peak_sqmi"] == 140.0
@@ -97,6 +116,9 @@ def test_live_mode_returns_three_variation_bands(make_client, httpx_mock):
         assert f["geometry"]["type"] == "Polygon"
         assert f["properties"]["area_sqmi"] > 0
         assert f["properties"]["contour_minutes"] == 30
+    # Clipping guarantees the bands nest -> areas are monotonic non-increasing.
+    areas = [f["properties"]["area_sqmi"] for f in fc["features"]]
+    assert areas[0] >= areas[1] >= areas[2]
     assert fc["properties"]["variation"]["peak_shrink_pct"] is not None
 
 

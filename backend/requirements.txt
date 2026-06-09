@@ -3,6 +3,7 @@ uvicorn[standard]>=0.29
 httpx>=0.27
 pydantic-settings>=2.2
 tzdata>=2024.1  # IANA tz database for zoneinfo (Windows has none built in)
+shapely>=2.0  # runtime: clip commute bands so they nest (app/isochrone.py)
 
 # Dev / test
 pytest>=8.0
@@ -11,4 +12,3 @@ ruff>=0.4
 
 # Data preprocessing (scripts/build_data.py only; not needed to run the app)
 pandas>=2.2
-shapely>=2.0

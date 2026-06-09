@@ -16,6 +16,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
+from shapely.geometry import mapping, shape
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,13 @@ ISO_URL = "https://api.mapbox.com/isochrone/v1/mapbox/{profile}/{lon},{lat}"
 # from largest reach (off-peak) to smallest (peak) so features render with the
 # peak band on top. (scenario, local hour, human label.)
 METRO_TZ = ZoneInfo("America/Los_Angeles")
+# Ordered outer (widest reach) -> inner (smallest). Hours chosen from measured
+# outbound reach: 12:00 midday baseline, 17:00 the genuine PM-rush low (leaving
+# the workplace), 20:00 light evening traffic. (scenario, local hour, label.)
 SCENARIOS: tuple[tuple[str, int, str], ...] = (
-    ("offpeak", 21, "Light traffic"),
+    ("offpeak", 20, "Light traffic"),
     ("typical", 12, "Midday"),
-    ("peak", 8, "Rush hour"),
+    ("peak", 17, "Evening rush"),
 )
 
 # Mapbox decorates each feature with styling props; strip them so our payload is
@@ -131,6 +135,24 @@ def geodesic_area_sqmi(geometry: dict[str, Any] | None) -> float:
     return round(area_m2 / _SQM_PER_SQMI, 1)
 
 
+def enforce_nesting(ordered: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
+    """Clip each band to the running outer intersection so they strictly nest
+    (peak ⊆ typical ⊆ off-peak). `ordered` is [(scenario, shapely geom)] from
+    outer (widest) to inner. Directional traffic can make raw contours cross;
+    this guarantees the inner band = area reachable even in worse traffic."""
+    out: list[tuple[str, Any]] = []
+    acc = None
+    for scenario, geom in ordered:
+        if not geom.is_valid:
+            geom = geom.buffer(0)  # repair self-intersections
+        clipped = geom if acc is None else geom.intersection(acc)
+        if clipped.is_empty or clipped.geom_type not in ("Polygon", "MultiPolygon"):
+            clipped = geom  # degenerate intersection -> keep this band unclipped
+        out.append((scenario, clipped))
+        acc = clipped
+    return out
+
+
 def summarize_variation(areas: dict[str, float]) -> dict[str, Any]:
     """Build the numeric reach-variation summary from per-scenario areas."""
     off, typ, peak = areas.get("offpeak"), areas.get("typical"), areas.get("peak")
@@ -173,8 +195,9 @@ def fetch_variation(
 
     now = now or datetime.datetime.now(METRO_TZ)
     logger.info("Fetching commute variation: %s min from work location", minutes)
-    features: list[dict[str, Any]] = []
-    areas: dict[str, float] = {}
+
+    # Fetch the succeeding scenarios in outer->inner order.
+    fetched: list[tuple[str, str, dict[str, Any]]] = []  # (scenario, label, feature)
     for scenario, hour, label in SCENARIOS:
         try:
             raw = _fetch_contour(
@@ -184,16 +207,22 @@ def fetch_variation(
             logger.warning("Isochrone scenario %s failed", scenario)
             continue
         cleaned = strip_mapbox_props(raw, minutes)
-        if not cleaned:
-            continue
-        feat = cleaned[0]
-        area = geodesic_area_sqmi(feat.get("geometry"))
-        feat["properties"].update({"scenario": scenario, "label": label, "area_sqmi": area})
-        features.append(feat)
-        areas[scenario] = area
+        if cleaned:
+            fetched.append((scenario, label, cleaned[0]))
 
-    if not features:
+    if not fetched:
         raise httpx.HTTPError("all isochrone scenarios failed")
+
+    # Clip so the bands strictly nest, then recompute areas from clipped geometry.
+    clipped = enforce_nesting([(scen, shape(feat["geometry"])) for scen, _, feat in fetched])
+    features: list[dict[str, Any]] = []
+    areas: dict[str, float] = {}
+    for (scenario, label, feat), (_, geom) in zip(fetched, clipped, strict=True):
+        geometry = mapping(geom)
+        area = geodesic_area_sqmi(geometry)
+        props = {**feat["properties"], "scenario": scenario, "label": label, "area_sqmi": area}
+        features.append({"type": "Feature", "properties": props, "geometry": geometry})
+        areas[scenario] = area
 
     payload = build_collection(
         features, lat=lat, lon=lon, minutes=minutes, variation=summarize_variation(areas)

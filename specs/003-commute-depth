@@ -17,10 +17,17 @@ in reachable area across times of day — the same contour under **off-peak**,
 - All contours come from the Mapbox **Isochrone API** (backend-only; token never
   client-side — 001 R5). Verified working with the project token:
   `mapbox/driving-traffic` profile + `depart_at` (ISO 8601) both return 200.
-- Variation = the same N-minute contour computed at three departure times using
-  `driving-traffic`: light-traffic evening (largest reach), midday (typical), and
-  AM rush (smallest reach). The gap between off-peak and peak is the "typical
-  variation" in commute reach.
+- The layer models drive time **leaving the workplace** (an isochrone is computed
+  outward from the work point at the departure time). Variation = the same
+  N-minute contour at three `driving-traffic` departures: **light traffic (~8pm,
+  largest reach)**, **midday**, and **evening rush (~5pm, smallest reach)** — the
+  PM rush is the genuine outbound-congestion low (measured), not the AM, which is
+  the uncongested reverse commute.
+- Because congestion is directional, raw contours can cross; the bands are
+  **clipped to strictly nest** (peak ⊆ typical ⊆ off-peak), so an inner band reads
+  as "reachable even in worse traffic." The off-peak↔peak gap is the variation.
+- Per-ZIP, time-of-day *inbound* (home→work) times would need the Matrix API's
+  `depart_at`, which returns 422 (beta) on the project token — deferred.
 - The Isochrone API caps each contour at **60 minutes**, so the time control tops
   out at 60. Per-ZIP numeric std-dev (Matrix API) is out of scope — its `depart_at`
   is beta and it needs many more calls.

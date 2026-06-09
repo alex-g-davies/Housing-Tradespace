@@ -44,14 +44,15 @@ export default function CommuteControl({ minutes, onMinutesChange, variation }: 
 
       {variation?.peak_shrink_pct != null ? (
         <p className="commute__summary">
-          Rush hour shrinks your {minutes}-min reach <strong>{variation.peak_shrink_pct}%</strong>{" "}
-          vs. light traffic.
+          Evening rush shrinks your {minutes}-min reach{" "}
+          <strong>{variation.peak_shrink_pct}%</strong> vs. light traffic.
         </p>
       ) : (
         <p className="commute__summary commute__summary--muted">
           Traffic variation unavailable (showing a typical contour).
         </p>
       )}
+      <p className="commute__note">Drive time leaving your workplace.</p>
     </div>
   );
 }
