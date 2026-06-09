@@ -23,3 +23,8 @@ export function formatPct(value: number): string {
 export function formatPpsf(value: number): string {
   return `$${Math.round(value)}/sqft`;
 }
+
+/** Area in square miles, e.g. 467.8 -> "468 mi²"; null -> "—". */
+export function formatSqMi(value: number | null | undefined): string {
+  return value == null ? "—" : `${Math.round(value)} mi²`;
+}

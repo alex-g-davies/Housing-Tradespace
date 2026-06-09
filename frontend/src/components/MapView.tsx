@@ -5,13 +5,14 @@ import type { FeatureCollection } from "geojson";
 
 import {
   BASEMAP_STYLE_URL,
+  COMMUTE_FILL,
   IN_BUDGET_OPACITY,
-  ISOCHRONE_FILL,
-  ISOCHRONE_LINE,
   MAP_CENTER,
   MAP_ZOOM,
   type MetricDef,
   OVER_BUDGET_OPACITY,
+  SCENARIO_STYLES,
+  WORK_MARKER_COLOR,
   type WorkLocation,
 } from "../config";
 import type { ZipValue } from "../api/client";
@@ -82,7 +83,7 @@ export default function MapView({
 
     // Draggable work-location pin; dragging or clicking the map moves it and
     // triggers an isochrone refetch upstream.
-    const pin = new maplibregl.Marker({ color: ISOCHRONE_LINE, draggable: true })
+    const pin = new maplibregl.Marker({ color: WORK_MARKER_COLOR, draggable: true })
       .setLngLat([workRef.current.lon, workRef.current.lat])
       .setPopup(new maplibregl.Popup({ closeButton: false }).setText("Work location"))
       .addTo(m);
@@ -175,17 +176,22 @@ export default function MapView({
       return;
     }
     m.addSource(ISO_SOURCE, { type: "geojson", data: data as never });
+    // One light wash over the reachable union...
     m.addLayer({
       id: "iso-fill",
       type: "fill",
       source: ISO_SOURCE,
-      paint: { "fill-color": ISOCHRONE_FILL, "fill-opacity": 0.18 },
+      paint: { "fill-color": COMMUTE_FILL, "fill-opacity": 0.1 },
     });
+    // ...and a distinct outline per departure scenario (offpeak/typical/peak).
+    const lineColor: unknown[] = ["match", ["get", "scenario"]];
+    for (const s of SCENARIO_STYLES) lineColor.push(s.key, s.line);
+    lineColor.push("#888888"); // fallback (e.g. fixture's "typical")
     m.addLayer({
       id: "iso-line",
       type: "line",
       source: ISO_SOURCE,
-      paint: { "line-color": ISOCHRONE_LINE, "line-width": 2 },
+      paint: { "line-color": lineColor as never, "line-width": 2 },
     });
   }
 

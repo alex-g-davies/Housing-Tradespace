@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPct, formatPpsf, formatUsd, formatUsdCompact } from "../lib/format";
+import { formatPct, formatPpsf, formatSqMi, formatUsd, formatUsdCompact } from "../lib/format";
 
 describe("format", () => {
   it("formats full currency with thousands separators", () => {
@@ -22,5 +22,10 @@ describe("format", () => {
   it("formats price per square foot", () => {
     expect(formatPpsf(612)).toBe("$612/sqft");
     expect(formatPpsf(611.6)).toBe("$612/sqft");
+  });
+
+  it("formats area in square miles, with a dash for null", () => {
+    expect(formatSqMi(467.8)).toBe("468 mi²");
+    expect(formatSqMi(null)).toBe("—");
   });
 });

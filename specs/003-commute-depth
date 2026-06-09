@@ -1,0 +1,71 @@
+# Spec 003 — Commute depth: adjustable time + typical variation
+
+Status: Draft
+Owner: <you>
+Related: builds on 001-mvp R3/R5 (single hard-coded 30-min isochrone)
+
+## Overview
+
+The MVP draws one hard-coded 30-minute drive-time contour. This feature makes
+the commute layer interactive and honest about traffic: the user can **adjust the
+commute time** (15 / 30 / 45 / 60 min), and the map shows the **typical variation**
+in reachable area across times of day — the same contour under **off-peak**,
+**typical**, and **peak** departure — plus a numeric summary of the spread.
+
+## Context
+
+- All contours come from the Mapbox **Isochrone API** (backend-only; token never
+  client-side — 001 R5). Verified working with the project token:
+  `mapbox/driving-traffic` profile + `depart_at` (ISO 8601) both return 200.
+- Variation = the same N-minute contour computed at three departure times using
+  `driving-traffic`: light-traffic evening (largest reach), midday (typical), and
+  AM rush (smallest reach). The gap between off-peak and peak is the "typical
+  variation" in commute reach.
+- The Isochrone API caps each contour at **60 minutes**, so the time control tops
+  out at 60. Per-ZIP numeric std-dev (Matrix API) is out of scope — its `depart_at`
+  is beta and it needs many more calls.
+
+## Requirements
+
+- **R1 — Adjustable commute time.** The user selects the contour time from
+  discrete steps **15 / 30 / 45 / 60** minutes; the map updates to that time.
+  Selection is bounded (no free-drag spamming of the API).
+- **R2 — Time-of-day variation bands.** For the selected time, the map overlays
+  three contours — off-peak / typical / peak departure — visually distinct and
+  layered so the peak (smallest) reads on top of the off-peak (largest).
+- **R3 — Numeric variation summary.** A readout shows the reach spread, e.g.
+  off-peak vs peak reachable area (mi²) and the peak shrink (%).
+- **R4 — Key safety preserved.** The token stays server-side; the client only
+  passes `lat`/`lon`/`minutes` to its own origin (001 R5 intact).
+- **R5 — Graceful degradation.** If traffic/`depart_at` is unavailable (tier) or a
+  scenario call fails, the map still renders the scenarios that succeed; with no
+  token (fixture mode) it shows a single typical contour and no variation summary.
+
+## Non-functional / Constraints
+
+- Bounded Mapbox usage: ≤ 3 Isochrone calls per (location, time); results cached.
+- `depart_at` timestamps are future weekday occurrences in the metro's local
+  timezone (America/Los_Angeles), computed server-side.
+- Re-selecting a time is a fetch + repaint; no full page reload.
+
+## Acceptance Criteria
+
+- [ ] Choosing 15 / 30 / 45 / 60 redraws the contour(s) for that time.
+- [ ] Three departure scenarios render as distinct, layered bands (peak on top).
+- [ ] A summary shows off-peak vs peak reach (mi²) and the peak shrink %.
+- [ ] With the token unset, a single contour still renders and the app works.
+- [ ] The browser Network tab shows no Mapbox token in any client request.
+- [ ] `pytest` (backend) and `npm run test` (frontend) pass.
+
+## Out of Scope (explicit)
+
+- Per-ZIP commute std-dev via the Matrix API (depart_at beta; many calls).
+- Times above 60 min (Isochrone API limit) and distance-based contours.
+- User-chosen departure time / day; scenarios are fixed representative windows.
+- Transit/walking/cycling modes.
+
+## Verification notes
+
+Criteria trace: time control → R1; bands → R2; summary → R3; token absence → R4;
+fixture/partial-failure → R5. Verify against a running build with a live token;
+the implementing agent does not self-certify done.

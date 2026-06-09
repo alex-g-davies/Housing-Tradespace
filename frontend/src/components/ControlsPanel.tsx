@@ -1,6 +1,8 @@
+import type { CommuteVariation } from "../api/client";
 import type { MetricDef, MetricKey, WorkLocation } from "../config";
 import AddressSearch from "./AddressSearch";
 import BudgetInput from "./BudgetInput";
+import CommuteControl from "./CommuteControl";
 import Legend from "./Legend";
 import MetricSwitcher from "./MetricSwitcher";
 
@@ -10,6 +12,9 @@ interface Props {
   activeMetric: MetricDef;
   metricKey: MetricKey;
   onMetricChange: (key: MetricKey) => void;
+  minutes: number;
+  onMinutesChange: (minutes: number) => void;
+  variation: CommuteVariation | null;
   work: WorkLocation;
   onResetWork: () => void;
   onAddressLocated: (lat: number, lon: number, label: string) => void;
@@ -23,6 +28,9 @@ export default function ControlsPanel({
   activeMetric,
   metricKey,
   onMetricChange,
+  minutes,
+  onMinutesChange,
+  variation,
   work,
   onResetWork,
   onAddressLocated,
@@ -46,6 +54,12 @@ export default function ControlsPanel({
         </button>
         <span className="work__hint">Drag the pin to move it, or search an address</span>
       </div>
+
+      <CommuteControl
+        minutes={minutes}
+        onMinutesChange={onMinutesChange}
+        variation={variation}
+      />
 
       <span className="section-label">Shade map by</span>
       <MetricSwitcher active={metricKey} onChange={onMetricChange} />

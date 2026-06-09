@@ -262,6 +262,50 @@ body,
   color: var(--muted);
 }
 
+/* Commute control */
+.commute {
+  margin-bottom: 14px;
+}
+
+.scenarios {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.scenarios__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+
+.scenarios__line {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.scenarios__area {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.commute__summary {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.commute__summary--muted {
+  color: var(--muted);
+}
+
 /* Metric switcher (segmented control) */
 .switcher {
   display: flex;

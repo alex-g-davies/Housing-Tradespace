@@ -3,9 +3,11 @@
 Decide where you could live by overlaying **housing cost** and **commute time**.
 The MVP (spec [`specs/001-mvp`](specs/001-mvp)) renders a Seattle-metro map that
 shades each ZIP by median home value, de-emphasizes ZIPs over a budget, and
-overlays a 30-minute drive-time isochrone from a work location you can move by
-dragging the pin or clicking the map (default: the Museum of Flight). Movable
-work location goes beyond spec 001's MVP scope.
+overlays a drive-time isochrone from a work location you can move by dragging the
+pin (default: the Museum of Flight). Later specs add richer per-ZIP metrics and a
+metric switcher ([`002`](specs/002-data-enrichment)) and an adjustable commute
+time (15/30/45/60 min) with time-of-day reach variation
+([`003`](specs/003-commute-depth)). Specs 002–003 go beyond the original MVP scope.
 
 The map is the product: a FastAPI backend serves preprocessed aggregate data and
 proxies the (token-bearing) Mapbox Isochrone call; a React + MapLibre frontend
@@ -92,15 +94,17 @@ Sources (free / aggregate):
   committed file. Without it, $/sqft renders as "no data" and the app works
   normally.
 
-To regenerate the live isochrone fixture for a new work location, set
-`MAPBOX_TOKEN`, `WORK_LAT`, `WORK_LON`, hit `/api/isochrone`, and save the response
-to `backend/data/isochrone_fixture.json`.
+The committed `backend/data/isochrone_fixture.json` is a single drive-time polygon
+served only in **fixture mode** (no `MAPBOX_TOKEN`) as one "typical" band. With a
+token, `/api/isochrone` instead returns three live traffic-aware bands (off-peak /
+midday / rush hour) for the selected time, so the fixture is just an offline
+fallback — keep it a single Polygon feature.
 
 ## Verifying the MVP (spec acceptance criteria)
 
 1. Page load shows the ZIP choropleth + color legend. *(choropleth → R1/R2)*
 2. Entering a budget de-emphasizes over-budget ZIPs. *(→ R4)*
-3. The 30-min isochrone is visible and road-bounded — with a live token, not a
+3. The drive-time reach is visible and road-bounded — with a live token, not a
    circle. Dragging the pin moves it and refetches; an address search relocates
    it. *(→ R3)*
 4. The browser Network tab shows no Mapbox token in any client request — only
@@ -109,7 +113,10 @@ to `backend/data/isochrone_fixture.json`.
    $/sqft); YoY shows falling ZIPs in a distinct hue. *(spec 002 → R4)*
 6. Hovering/tapping a ZIP shows value, YoY, 5-year CAGR, $/sqft, and a sparkline.
    *(spec 002 → R5)*
-7. `pytest` (backend) and `npm run test` (frontend) pass.
+7. Choosing 15/30/45/60 min redraws the reach; three departure bands (off-peak /
+   midday / rush hour) render with distinct outlines, and the panel shows the
+   peak-vs-off-peak reach (mi²) and shrink %. *(spec 003 → R1–R3)*
+8. `pytest` (backend) and `npm run test` (frontend) pass.
 
 The human walks this list against the running app; the implementer does not
 self-certify done.

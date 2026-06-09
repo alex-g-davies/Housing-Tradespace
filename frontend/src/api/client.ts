@@ -31,13 +31,21 @@ export const getHousing = () => getJson<HousingResponse>("/housing");
 
 export const getZipsGeojson = () => getJson<FeatureCollection>("/zips.geojson");
 
-export const getIsochrone = (lat: number, lon: number) =>
-  getJson<FeatureCollection>(`/isochrone?lat=${lat}&lon=${lon}`);
+export const getIsochrone = (lat: number, lon: number, minutes: number) =>
+  getJson<FeatureCollection>(`/isochrone?lat=${lat}&lon=${lon}&minutes=${minutes}`);
 
 export interface GeocodeResult {
   lat: number;
   lon: number;
   place_name: string;
+}
+
+/** Reach-area variation across departure scenarios (spec 003). */
+export interface CommuteVariation {
+  offpeak_sqmi: number | null;
+  typical_sqmi: number | null;
+  peak_sqmi: number | null;
+  peak_shrink_pct: number | null;
 }
 
 /** Forward-geocode an address via the backend. Throws Error("not_found") on a

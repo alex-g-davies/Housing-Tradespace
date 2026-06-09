@@ -113,6 +113,24 @@ export const METRICS: MetricDef[] = [
 export const OVER_BUDGET_OPACITY = 0.15;
 export const IN_BUDGET_OPACITY = 0.85;
 
-// Commute isochrone overlay — a warm accent that contrasts the cool choropleth.
-export const ISOCHRONE_FILL = "#ff7043";
-export const ISOCHRONE_LINE = "#e64a19";
+// Commute isochrone overlay. A single light fill washes the reachable union;
+// each time-of-day scenario gets a distinct outline color (spec 003).
+export const COMMUTE_FILL = "#1f9e8f";
+export const WORK_MARKER_COLOR = "#e64a19";
+
+// Selectable commute times (min). Mapbox isochrones cap at 60.
+export const COMMUTE_STEPS = [15, 30, 45, 60] as const;
+export const DEFAULT_MINUTES = 30;
+
+// Departure scenarios, outer (widest reach) -> inner. Keys match the backend
+// `scenario` property; order drives the legend.
+export interface ScenarioStyle {
+  key: "offpeak" | "typical" | "peak";
+  label: string;
+  line: string;
+}
+export const SCENARIO_STYLES: ScenarioStyle[] = [
+  { key: "offpeak", label: "Light traffic", line: "#2e7d32" },
+  { key: "typical", label: "Midday", line: "#f9a825" },
+  { key: "peak", label: "Rush hour", line: "#c62828" },
+];
