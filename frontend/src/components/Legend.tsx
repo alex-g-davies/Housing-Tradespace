@@ -7,11 +7,12 @@ interface Props {
 
 /**
  * Color legend for the active metric (R2/002). Stops + formatter come from the
- * metric definition so the legend can never drift from the map fill. The
- * "over budget" entry only applies to the value metric.
+ * metric definition so the legend can never drift from the map fill. The budget
+ * de-emphasis applies on every metric, so the "over budget" entry is shown
+ * whenever a budget is set (not just on the value metric).
  */
 export default function Legend({ metric, budget }: Props) {
-  const showOverBudget = metric.key === "value" && budget > 0;
+  const showOverBudget = budget > 0;
   return (
     <div className="legend" aria-label={`${metric.label} legend`}>
       <div className="legend-title">{metric.label}</div>

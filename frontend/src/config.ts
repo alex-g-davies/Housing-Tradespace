@@ -71,7 +71,8 @@ export type MetricKey = "value" | "yoy" | "ppsf";
 
 export interface MetricDef {
   key: MetricKey;
-  label: string;
+  label: string; // full label (legend title, a11y)
+  short: string; // compact label for the switcher button
   property: string;
   stops: ColorStop[];
   diverging: boolean;
@@ -82,6 +83,7 @@ export const METRICS: MetricDef[] = [
   {
     key: "value",
     label: "Median value",
+    short: "Value",
     property: "median_value",
     stops: COLOR_STOPS,
     diverging: false,
@@ -90,6 +92,7 @@ export const METRICS: MetricDef[] = [
   {
     key: "yoy",
     label: "YoY change",
+    short: "YoY",
     property: "yoy_pct",
     stops: YOY_STOPS,
     diverging: true,
@@ -98,6 +101,7 @@ export const METRICS: MetricDef[] = [
   {
     key: "ppsf",
     label: "$/sqft",
+    short: "$/sqft",
     property: "ppsf",
     stops: PPSF_STOPS,
     diverging: false,

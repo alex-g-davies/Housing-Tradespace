@@ -16,14 +16,14 @@ describe("Legend (R2/002)", () => {
     expect(screen.getByText("Median value")).toBeInTheDocument();
   });
 
-  it("shows the over-budget entry only for the value metric with a budget set (R4)", () => {
+  it("shows the over-budget entry whenever a budget is set, on any metric (R4)", () => {
     const { rerender } = render(<Legend metric={VALUE} budget={0} />);
     expect(screen.queryByText("Over budget")).not.toBeInTheDocument();
     rerender(<Legend metric={VALUE} budget={800000} />);
     expect(screen.getByText("Over budget")).toBeInTheDocument();
-    // Over-budget is value-only — not shown when shading by YoY.
+    // The budget fade applies on every metric, so the entry stays for YoY too.
     rerender(<Legend metric={YOY} budget={800000} />);
-    expect(screen.queryByText("Over budget")).not.toBeInTheDocument();
+    expect(screen.getByText("Over budget")).toBeInTheDocument();
   });
 
   it("formats boundaries with the metric's formatter (e.g. percent for YoY)", () => {

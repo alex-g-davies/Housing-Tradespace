@@ -15,9 +15,11 @@ export default function MetricSwitcher({ active, onChange }: Props) {
           type="button"
           className={m.key === active ? "switcher__btn switcher__btn--active" : "switcher__btn"}
           aria-pressed={m.key === active}
+          aria-label={m.label}
+          title={m.label}
           onClick={() => onChange(m.key)}
         >
-          {m.label}
+          {m.short}
         </button>
       ))}
     </div>

@@ -47,7 +47,7 @@ export default function ControlsPanel({
         <span className="work__hint">Drag the pin to move it, or search an address</span>
       </div>
 
-      <span className="work__label">Shade map by</span>
+      <span className="section-label">Shade map by</span>
       <MetricSwitcher active={metricKey} onChange={onMetricChange} />
       <Legend metric={activeMetric} budget={budget} />
 
