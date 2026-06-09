@@ -113,9 +113,8 @@ export const METRICS: MetricDef[] = [
 export const OVER_BUDGET_OPACITY = 0.15;
 export const IN_BUDGET_OPACITY = 0.85;
 
-// Commute isochrone overlay. A single light fill washes the reachable union;
-// each time-of-day scenario gets a distinct outline color (spec 003).
-export const COMMUTE_FILL = "#1f9e8f";
+// Commute isochrone overlay — outline-only; each time-of-day scenario gets a
+// distinct outline color (spec 003).
 export const WORK_MARKER_COLOR = "#e64a19";
 
 // Selectable commute times (min). Mapbox isochrones cap at 60.

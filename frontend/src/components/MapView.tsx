@@ -5,7 +5,6 @@ import type { FeatureCollection } from "geojson";
 
 import {
   BASEMAP_STYLE_URL,
-  COMMUTE_FILL,
   IN_BUDGET_OPACITY,
   MAP_CENTER,
   MAP_ZOOM,
@@ -34,6 +33,16 @@ interface Props {
 const ZIP_SOURCE = "zips";
 const ISO_SOURCE = "isochrone";
 const ZIP_FILL = "zip-fill";
+const ISO_LINE = "iso-line";
+
+/** Id of the basemap's first label (symbol) layer. Custom layers are inserted
+ * before it so basemap labels (city/road names) render on top of the choropleth. */
+function firstSymbolLayerId(m: maplibregl.Map): string | undefined {
+  for (const layer of m.getStyle().layers ?? []) {
+    if (layer.type === "symbol") return layer.id;
+  }
+  return undefined;
+}
 
 export default function MapView({
   geojson,
@@ -141,28 +150,37 @@ export default function MapView({
       return;
     }
     m.addSource(ZIP_SOURCE, { type: "geojson", data: data as never });
-    m.addLayer({
-      id: ZIP_FILL,
-      type: "fill",
-      source: ZIP_SOURCE,
-      paint: {
-        "fill-color": fillColorExpression(
-          metricRef.current.property,
-          metricRef.current.stops,
-        ) as never,
-        "fill-opacity": fillOpacityExpression(
-          budgetRef.current,
-          IN_BUDGET_OPACITY,
-          OVER_BUDGET_OPACITY,
-        ) as never,
+    // Keep the choropleth beneath the commute outline (if present) and the
+    // basemap labels, so city/road names stay legible on top.
+    const anchor = m.getLayer(ISO_LINE) ? ISO_LINE : firstSymbolLayerId(m);
+    m.addLayer(
+      {
+        id: ZIP_FILL,
+        type: "fill",
+        source: ZIP_SOURCE,
+        paint: {
+          "fill-color": fillColorExpression(
+            metricRef.current.property,
+            metricRef.current.stops,
+          ) as never,
+          "fill-opacity": fillOpacityExpression(
+            budgetRef.current,
+            IN_BUDGET_OPACITY,
+            OVER_BUDGET_OPACITY,
+          ) as never,
+        },
       },
-    });
-    m.addLayer({
-      id: "zip-border",
-      type: "line",
-      source: ZIP_SOURCE,
-      paint: { "line-color": "#ffffff", "line-width": 0.6, "line-opacity": 0.7 },
-    });
+      anchor,
+    );
+    m.addLayer(
+      {
+        id: "zip-border",
+        type: "line",
+        source: ZIP_SOURCE,
+        paint: { "line-color": "#ffffff", "line-width": 0.6, "line-opacity": 0.7 },
+      },
+      anchor,
+    );
   }
 
   // Commute isochrone overlay (the work pin is managed separately).
@@ -176,23 +194,20 @@ export default function MapView({
       return;
     }
     m.addSource(ISO_SOURCE, { type: "geojson", data: data as never });
-    // One light wash over the reachable union...
-    m.addLayer({
-      id: "iso-fill",
-      type: "fill",
-      source: ISO_SOURCE,
-      paint: { "fill-color": COMMUTE_FILL, "fill-opacity": 0.1 },
-    });
-    // ...and a distinct outline per departure scenario (offpeak/typical/peak).
+    // Outline-only (no fill) per departure scenario, so the map below stays
+    // readable; kept beneath the basemap labels.
     const lineColor: unknown[] = ["match", ["get", "scenario"]];
     for (const s of SCENARIO_STYLES) lineColor.push(s.key, s.line);
     lineColor.push("#888888"); // fallback (e.g. fixture's "typical")
-    m.addLayer({
-      id: "iso-line",
-      type: "line",
-      source: ISO_SOURCE,
-      paint: { "line-color": lineColor as never, "line-width": 2 },
-    });
+    m.addLayer(
+      {
+        id: ISO_LINE,
+        type: "line",
+        source: ISO_SOURCE,
+        paint: { "line-color": lineColor as never, "line-width": 2 },
+      },
+      firstSymbolLayerId(m),
+    );
   }
 
   // Re-sync layers when data arrives.
