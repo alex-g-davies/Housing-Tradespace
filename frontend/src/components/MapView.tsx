@@ -44,6 +44,17 @@ function firstSymbolLayerId(m: maplibregl.Map): string | undefined {
   return undefined;
 }
 
+/** Id of the basemap's (opaque) water fill layer. Inserting the choropleth
+ * before it lets the basemap's accurate water mask the ZIP colors over water —
+ * no geometry clipping needed. */
+function waterLayerId(m: maplibregl.Map): string | undefined {
+  for (const layer of m.getStyle().layers ?? []) {
+    const srcLayer = (layer as { "source-layer"?: string })["source-layer"];
+    if (layer.type === "fill" && (srcLayer === "water" || layer.id === "water")) return layer.id;
+  }
+  return undefined;
+}
+
 export default function MapView({
   geojson,
   isochrone,
@@ -150,9 +161,10 @@ export default function MapView({
       return;
     }
     m.addSource(ZIP_SOURCE, { type: "geojson", data: data as never });
-    // Keep the choropleth beneath the commute outline (if present) and the
-    // basemap labels, so city/road names stay legible on top.
-    const anchor = m.getLayer(ISO_LINE) ? ISO_LINE : firstSymbolLayerId(m);
+    // Insert the choropleth beneath the basemap's opaque water layer, so water,
+    // roads, and labels all render on top — the basemap's accurate water masks
+    // the ZIP colors over Puget Sound / lakes without clipping the geometry.
+    const anchor = waterLayerId(m) ?? firstSymbolLayerId(m);
     m.addLayer(
       {
         id: ZIP_FILL,
