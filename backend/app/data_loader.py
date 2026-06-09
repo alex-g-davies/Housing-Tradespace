@@ -60,39 +60,94 @@ def _coerce_value(raw: Any) -> int | None:
     return int(round(v))
 
 
+def _coerce_float(raw: Any) -> float | None:
+    """Return a float metric (may be negative, e.g. YoY), or None if invalid."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return None if v != v else v  # drop NaN
+
+
+def _coerce_history(raw: Any) -> list[tuple[str, int]] | None:
+    """Validate a [[label, value], ...] series, dropping malformed points."""
+    if not isinstance(raw, list):
+        return None
+    out: list[tuple[str, int]] = []
+    for item in raw:
+        if isinstance(item, list | tuple) and len(item) == 2:
+            label, value = item
+            v = _coerce_value(value)
+            if isinstance(label, str) and v is not None:
+                out.append((label, v))
+    return out or None
+
+
+@dataclass
+class ZipRecord:
+    """One ZIP's metrics. median_value is required; the rest are optional (002)."""
+
+    zip: str
+    median_value: int
+    yoy_pct: float | None = None
+    cagr5_pct: float | None = None
+    ppsf: float | None = None
+    history: list[tuple[str, int]] | None = None
+
+
 @dataclass
 class ParsedHousing:
     metro: str
     as_of: str
-    values: dict[str, int] = field(default_factory=dict)  # zip -> median_value
+    records: dict[str, ZipRecord] = field(default_factory=dict)  # zip -> record
     skipped: int = 0
 
 
 def parse_housing(raw: dict[str, Any]) -> ParsedHousing:
-    """Validate a raw ZHVI JSON dict into a zip->value map, skipping bad rows."""
+    """Validate a raw ZHVI JSON dict into a zip->record map, skipping bad rows.
+
+    A row needs a valid ZIP and a positive median_value; the enriched metrics are
+    coerced individually and left as None when missing/invalid (never fatal)."""
     metro = str(raw.get("metro", ""))
     as_of = str(raw.get("as_of", ""))
-    values: dict[str, int] = {}
+    records: dict[str, ZipRecord] = {}
     skipped = 0
     for row in raw.get("zips", []) or []:
-        z = normalize_zip(row.get("zip") if isinstance(row, dict) else None)
-        v = _coerce_value(row.get("median_value") if isinstance(row, dict) else None)
+        if not isinstance(row, dict):
+            skipped += 1
+            continue
+        z = normalize_zip(row.get("zip"))
+        v = _coerce_value(row.get("median_value"))
         if z is None or v is None:
             skipped += 1
             continue
-        values[z] = v
+        records[z] = ZipRecord(
+            zip=z,
+            median_value=v,
+            yoy_pct=_coerce_float(row.get("yoy_pct")),
+            cagr5_pct=_coerce_float(row.get("cagr5_pct")),
+            ppsf=_coerce_float(row.get("ppsf")),
+            history=_coerce_history(row.get("history")),
+        )
     if skipped:
         logger.info("parse_housing: skipped %d invalid ZHVI row(s)", skipped)
-    return ParsedHousing(metro=metro, as_of=as_of, values=values, skipped=skipped)
+    return ParsedHousing(metro=metro, as_of=as_of, records=records, skipped=skipped)
 
 
-def merge_geojson(geojson_raw: dict[str, Any], values: dict[str, int]) -> dict[str, Any]:
-    """Return a FeatureCollection with normalized `zip` + merged `median_value`.
+# Scalar metrics merged into the choropleth GeoJSON for data-driven shading.
+# History is intentionally excluded — MapLibre stringifies nested feature
+# properties, so the popup reads history from /api/housing instead.
+GEOJSON_METRICS = ("median_value", "yoy_pct", "ppsf")
 
-    Features whose ZIP can't be normalized are dropped (skipped, not fatal).
-    `median_value` is set to the matching value, or omitted entirely when there
-    is no value for that ZIP (so the frontend can guard with `['has', ...]` and
-    render it as 'no data').
+
+def merge_geojson(geojson_raw: dict[str, Any], records: dict[str, ZipRecord]) -> dict[str, Any]:
+    """Return a FeatureCollection with normalized `zip` + merged scalar metrics.
+
+    Features whose ZIP can't be normalized are dropped (skipped, not fatal). Each
+    metric is set when present and omitted otherwise, so the frontend can guard
+    with `['has', metric]` and render missing metrics as 'no data'.
     """
     features_out: list[dict[str, Any]] = []
     dropped = 0
@@ -104,11 +159,13 @@ def merge_geojson(geojson_raw: dict[str, Any], values: dict[str, int]) -> dict[s
             dropped += 1
             continue
         props["zip"] = z
-        value = values.get(z)
-        if value is not None:
-            props["median_value"] = value
-        else:
-            props.pop("median_value", None)
+        record = records.get(z)
+        for metric in GEOJSON_METRICS:
+            value = getattr(record, metric, None) if record else None
+            if value is not None:
+                props[metric] = value
+            else:
+                props.pop(metric, None)
         features_out.append({**feat, "properties": props})
     if dropped:
         logger.info("merge_geojson: dropped %d feature(s) with invalid ZIP", dropped)
@@ -125,10 +182,10 @@ class DataStore:
         with open(data_dir / ZHVI_FILE, encoding="utf-8") as f:
             housing = parse_housing(json.load(f))
         with open(data_dir / ZCTA_FILE, encoding="utf-8") as f:
-            geojson = merge_geojson(json.load(f), housing.values)
+            geojson = merge_geojson(json.load(f), housing.records)
         logger.info(
-            "DataStore loaded: %d ZIP values, %d geojson features",
-            len(housing.values),
+            "DataStore loaded: %d ZIP records, %d geojson features",
+            len(housing.records),
             len(geojson["features"]),
         )
         return cls(housing=housing, geojson=geojson)

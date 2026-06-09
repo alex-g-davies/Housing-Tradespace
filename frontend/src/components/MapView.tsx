@@ -10,15 +10,19 @@ import {
   ISOCHRONE_LINE,
   MAP_CENTER,
   MAP_ZOOM,
+  type MetricDef,
   OVER_BUDGET_OPACITY,
   type WorkLocation,
 } from "../config";
+import type { ZipValue } from "../api/client";
 import { fillColorExpression, fillOpacityExpression } from "../lib/colorScale";
-import { formatUsd } from "../lib/format";
+import { buildZipPopupHtml } from "../lib/popup";
 
 interface Props {
   geojson: FeatureCollection | null;
   isochrone: FeatureCollection | null;
+  records: Map<string, ZipValue>;
+  activeMetric: MetricDef;
   budget: number;
   work: WorkLocation;
   onWorkChange: (lat: number, lon: number) => void;
@@ -33,6 +37,8 @@ const ZIP_FILL = "zip-fill";
 export default function MapView({
   geojson,
   isochrone,
+  records,
+  activeMetric,
   budget,
   work,
   onWorkChange,
@@ -58,6 +64,10 @@ export default function MapView({
   isochroneRef.current = isochrone;
   const budgetRef = useRef(budget);
   budgetRef.current = budget;
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
+  const metricRef = useRef(activeMetric);
+  metricRef.current = activeMetric;
 
   // Create the map once.
   useEffect(() => {
@@ -90,15 +100,10 @@ export default function MapView({
       const f = e.features?.[0];
       if (!f) return;
       m.getCanvas().style.cursor = "pointer";
-      const props = (f.properties ?? {}) as { zip?: string; median_value?: number };
-      const value =
-        props.median_value != null ? formatUsd(props.median_value) : "No price data";
+      const zip = ((f.properties ?? {}) as { zip?: string }).zip ?? "";
       info
         .setLngLat(e.lngLat)
-        .setHTML(
-          `<div class="tip"><div class="tip__zip">ZIP ${props.zip ?? "—"}</div>` +
-            `<div class="tip__val">${value}</div></div>`,
-        )
+        .setHTML(buildZipPopupHtml(zip, recordsRef.current.get(zip)))
         .addTo(m);
     };
     m.on("mousemove", ZIP_FILL, showInfo);
@@ -140,7 +145,10 @@ export default function MapView({
       type: "fill",
       source: ZIP_SOURCE,
       paint: {
-        "fill-color": fillColorExpression() as never,
+        "fill-color": fillColorExpression(
+          metricRef.current.property,
+          metricRef.current.stops,
+        ) as never,
         "fill-opacity": fillOpacityExpression(
           budgetRef.current,
           IN_BUDGET_OPACITY,
@@ -212,6 +220,17 @@ export default function MapView({
       fillOpacityExpression(budget, IN_BUDGET_OPACITY, OVER_BUDGET_OPACITY) as never,
     );
   }, [budget]);
+
+  // Switching the active metric re-shades the choropleth (paint change only).
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !loaded.current || !m.getLayer(ZIP_FILL)) return;
+    m.setPaintProperty(
+      ZIP_FILL,
+      "fill-color",
+      fillColorExpression(activeMetric.property, activeMetric.stops) as never,
+    );
+  }, [activeMetric]);
 
   return <div ref={container} style={{ position: "absolute", inset: 0 }} />;
 }

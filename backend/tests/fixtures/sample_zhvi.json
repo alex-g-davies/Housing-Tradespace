@@ -2,10 +2,11 @@
   "metro": "Seattle, WA",
   "as_of": "2024-12-31",
   "zips": [
-    { "zip": "98101", "median_value": 720000 },
-    { "zip": 98109, "median_value": 890000 },
-    { "zip": "98103", "median_value": 950000 },
-    { "zip": "98112", "median_value": 1250000 },
+    { "zip": "98101", "median_value": 720000, "yoy_pct": 4.2, "cagr5_pct": 8.1, "ppsf": 612,
+      "history": [["2023-Q4", 700000], ["2024-Q2", 712000], ["2024-Q4", 720000]] },
+    { "zip": 98109, "median_value": 890000, "ppsf": 540 },
+    { "zip": "98103", "median_value": 950000, "yoy_pct": -1.5 },
+    { "zip": "98112", "median_value": 1250000, "yoy_pct": "oops" },
     { "zip": "ABCDE", "median_value": 500000 },
     { "zip": "98115", "median_value": null },
     { "zip": "98199", "median_value": -5 }

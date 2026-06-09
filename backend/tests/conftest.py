@@ -43,7 +43,7 @@ def fixture_store() -> DataStore:
     with open(FIXTURES / "sample_zhvi.json", encoding="utf-8") as f:
         housing = parse_housing(json.load(f))
     with open(FIXTURES / "sample_zcta.geojson", encoding="utf-8") as f:
-        geojson = merge_geojson(json.load(f), housing.values)
+        geojson = merge_geojson(json.load(f), housing.records)
     return DataStore(housing=housing, geojson=geojson)
 
 

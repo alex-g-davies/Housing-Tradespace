@@ -7,6 +7,11 @@ import type { FeatureCollection } from "geojson";
 export interface ZipValue {
   zip: string;
   median_value: number;
+  // Enriched metrics (spec 002); null when unavailable.
+  yoy_pct: number | null;
+  cagr5_pct: number | null;
+  ppsf: number | null;
+  history: [string, number][] | null;
 }
 
 export interface HousingResponse {

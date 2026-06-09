@@ -1,25 +1,26 @@
-import { COLOR_STOPS, NO_DATA_COLOR } from "../config";
-import { formatUsdCompact as formatK } from "../lib/format";
+import { type MetricDef, NO_DATA_COLOR } from "../config";
 
 interface Props {
+  metric: MetricDef;
   budget: number;
 }
 
 /**
- * Color legend for the choropleth (R2). Stops come from the shared config so
- * the legend can never drift from the map fill. Shows distinct "over budget"
- * and "no data" entries; the over-budget entry appears once a budget is set (R4).
+ * Color legend for the active metric (R2/002). Stops + formatter come from the
+ * metric definition so the legend can never drift from the map fill. The
+ * "over budget" entry only applies to the value metric.
  */
-export default function Legend({ budget }: Props) {
+export default function Legend({ metric, budget }: Props) {
+  const showOverBudget = metric.key === "value" && budget > 0;
   return (
-    <div className="legend" aria-label="Median home value legend">
-      <div className="legend-title">Median home value</div>
+    <div className="legend" aria-label={`${metric.label} legend`}>
+      <div className="legend-title">{metric.label}</div>
       <ul className="legend-list">
-        {COLOR_STOPS.map((stop, i) => {
-          const next = COLOR_STOPS[i + 1];
+        {metric.stops.map((stop, i) => {
+          const next = metric.stops[i + 1];
           const label = next
-            ? `${formatK(stop.value)}–${formatK(next.value)}`
-            : `${formatK(stop.value)}+`;
+            ? `${metric.format(stop.value)}–${metric.format(next.value)}`
+            : `${metric.format(stop.value)}+`;
           return (
             <li key={stop.value} className="legend-row">
               <span className="legend-swatch" style={{ background: stop.color }} />
@@ -31,7 +32,7 @@ export default function Legend({ budget }: Props) {
           <span className="legend-swatch" style={{ background: NO_DATA_COLOR }} />
           No data
         </li>
-        {budget > 0 && (
+        {showOverBudget && (
           <li className="legend-row">
             <span className="legend-swatch legend-swatch--faded" />
             Over budget

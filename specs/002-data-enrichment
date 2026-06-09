@@ -1,0 +1,78 @@
+# Spec 002 — Home-value dataset enrichment
+
+Status: Draft
+Owner: <you>
+Related: builds on 001-mvp (value-only choropleth)
+
+## Overview
+
+The MVP shades each ZIP by a single scalar median home value. This feature
+enriches each ZIP with additional market signal — **year-over-year % change**, a
+**5-year trend (CAGR)**, **median price per square foot ($/sqft)**, and a small
+**price-history sparkline** — and exposes it two ways: a **metric switcher** that
+re-shades the map (Value / YoY / $/sqft), and a **richer hover/tap popup** that
+shows all metrics plus the sparkline.
+
+## Context
+
+- YoY, CAGR, and history are derived for free from the Zillow ZHVI ZIP CSV the
+  build already downloads (it carries the full monthly history per ZIP; same
+  month-to-month, already smoothed + seasonally adjusted).
+- $/sqft is not in ZHVI at ZIP level. It comes from the **Redfin
+  `zip_code_market_tracker`** dataset (`MEDIAN_PPSF` — median sold price per
+  square foot, All Residential). Redfin is an **optional** second source: a large
+  one-time download filtered to a small committed file; the app must work (with
+  $/sqft greyed out) when it is absent.
+
+## Requirements
+
+- **R1 — Enriched per-ZIP record.** Each ZIP exposes `median_value` (required)
+  plus optional `yoy_pct`, `cagr5_pct`, `ppsf`, and `history`. Missing optional
+  metrics are omitted, never fatal (consistent with 001 R1).
+- **R2 — ZHVI-derived metrics.** `yoy_pct` (latest vs ~12 months prior),
+  `cagr5_pct` (annualized over ~5 years), and a downsampled `history` series are
+  computed from the existing ZHVI monthly columns.
+- **R3 — $/sqft from Redfin.** When the Redfin source is supplied, each matched
+  ZIP gets `ppsf`; when it is not, `ppsf` is absent and the app degrades cleanly.
+- **R4 — Metric switcher.** The user can switch the choropleth between Value, YoY,
+  and $/sqft. Each metric has its own color ramp and legend; YoY uses a diverging
+  scale centered on 0. ZIPs lacking the active metric render as "no data".
+- **R5 — Richer popup.** Hovering/tapping a ZIP shows median value, YoY (with
+  up/down emphasis), 5-year CAGR, $/sqft (or an "n/a" note), and a sparkline of
+  the price history.
+- **R6 — Key safety preserved.** No new client-exposed secrets; the frontend still
+  only calls its own origin (001 R5 intact).
+
+## Non-functional / Constraints
+
+- Only free/aggregate data; committed as small preprocessed files. Redfin's raw
+  file is large — it must be stream-filtered to Seattle ZIPs, not committed raw.
+- Map re-shading on metric switch is a paint change only (no data refetch).
+- $/sqft is sourced from sold transactions (`MEDIAN_PPSF`) and labeled "sold"
+  in the popup.
+
+## Acceptance Criteria
+
+- [ ] `seattle_zhvi.json` records carry `yoy_pct`, `cagr5_pct`, and `history`;
+      `ppsf` is present after a Redfin-enabled build and absent otherwise.
+- [ ] Switching the active metric re-shades the map and swaps the legend; YoY
+      shows declining ZIPs in a distinct hue from rising ones.
+- [ ] A ZIP popup shows value, YoY, 5-year CAGR, $/sqft (or n/a), and a sparkline.
+- [ ] ZIPs missing the active metric (e.g. no `ppsf`) render as "no data", not a
+      crash or a misleading color.
+- [ ] The browser Network tab shows no Mapbox token in any client request.
+- [ ] `pytest` (backend) and `npm run test` (frontend) pass.
+
+## Out of Scope (explicit)
+
+- Market-activity metrics (homes sold, days on market, sale-to-list, inventory) —
+  available from Redfin but not included here.
+- Time-scrubbing the map (animating the history); the sparkline is static.
+- Forecasting / optimization (future specs).
+
+## Verification notes
+
+Each criterion traces to a requirement: enriched record → R1/R2/R3; switcher +
+diverging YoY → R4; popup + sparkline → R5; no-data handling → R1/R4; token
+absence → R6. Verify by walking this list against a running build; the
+implementing agent does not self-certify done.

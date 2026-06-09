@@ -13,8 +13,18 @@ router = APIRouter(prefix="/api", tags=["housing"])
 
 @router.get("/housing", response_model=HousingResponse)
 def get_housing(store: DataStore = Depends(get_data_store)) -> HousingResponse:
-    """Per-ZIP median home values for the metro (R1). Invalid ZIPs are absent."""
-    zips = [ZipValue(zip=z, median_value=v) for z, v in sorted(store.housing.values.items())]
+    """Per-ZIP enriched metrics for the metro (R1/002). Invalid ZIPs are absent."""
+    zips = [
+        ZipValue(
+            zip=r.zip,
+            median_value=r.median_value,
+            yoy_pct=r.yoy_pct,
+            cagr5_pct=r.cagr5_pct,
+            ppsf=r.ppsf,
+            history=r.history,
+        )
+        for _, r in sorted(store.housing.records.items())
+    ]
     return HousingResponse(metro=store.housing.metro, as_of=store.housing.as_of, zips=zips)
 
 

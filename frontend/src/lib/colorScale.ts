@@ -1,7 +1,7 @@
 // Pure helpers for the choropleth ramp and budget logic. Kept free of React/
 // MapLibre so they are directly unit-testable (R2/R4).
 
-import { COLOR_STOPS, NO_DATA_COLOR } from "../config";
+import { COLOR_STOPS, type ColorStop, NO_DATA_COLOR } from "../config";
 
 /** Color for a median value, or the no-data color when value is missing. */
 export function colorForValue(value: number | null | undefined): string {
@@ -28,14 +28,17 @@ export function isOverBudget(
   return value > budget;
 }
 
-/** Build the MapLibre data-driven fill-color expression from the shared ramp. */
-export function fillColorExpression(): unknown[] {
-  const interpolate: unknown[] = ["interpolate", ["linear"], ["get", "median_value"]];
-  for (const stop of COLOR_STOPS) {
+/**
+ * Build the MapLibre data-driven fill-color expression for a given metric
+ * property + ramp. ZIPs lacking the property (omitted by the backend) fall
+ * through to the no-data color.
+ */
+export function fillColorExpression(property: string, stops: ColorStop[]): unknown[] {
+  const interpolate: unknown[] = ["interpolate", ["linear"], ["get", property]];
+  for (const stop of stops) {
     interpolate.push(stop.value, stop.color);
   }
-  // Guard ZIPs with no value (property omitted by the backend) -> no-data color.
-  return ["case", ["has", "median_value"], interpolate, NO_DATA_COLOR];
+  return ["case", ["has", property], interpolate, NO_DATA_COLOR];
 }
 
 /**

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { COLOR_STOPS, NO_DATA_COLOR } from "../config";
-import { colorForValue, fillOpacityExpression, isOverBudget } from "../lib/colorScale";
+import { COLOR_STOPS, NO_DATA_COLOR, YOY_STOPS } from "../config";
+import {
+  colorForValue,
+  fillColorExpression,
+  fillOpacityExpression,
+  isOverBudget,
+} from "../lib/colorScale";
 
 describe("colorForValue (R2)", () => {
   it("returns the no-data color for missing values", () => {
@@ -38,6 +43,26 @@ describe("isOverBudget (R4)", () => {
     expect(isOverBudget(null, 800_000)).toBe(false);
     expect(isOverBudget(900_000, 0)).toBe(false);
     expect(isOverBudget(900_000, null)).toBe(false);
+  });
+});
+
+describe("fillColorExpression (R2/002)", () => {
+  it("builds a no-data-guarded interpolate over the given property + stops", () => {
+    const expr = fillColorExpression("yoy_pct", YOY_STOPS);
+    expect(expr[0]).toBe("case");
+    expect(expr[1]).toEqual(["has", "yoy_pct"]); // missing -> no-data
+    expect(expr[3]).toBe(NO_DATA_COLOR);
+    const interpolate = expr[2] as unknown[];
+    expect(interpolate[0]).toBe("interpolate");
+    expect(interpolate[2]).toEqual(["get", "yoy_pct"]);
+    // first stop value + color follow the head
+    expect(interpolate).toContain(YOY_STOPS[0].value);
+    expect(interpolate).toContain(YOY_STOPS[0].color);
+  });
+
+  it("targets the requested property (value vs ppsf)", () => {
+    expect(fillColorExpression("median_value", COLOR_STOPS)[1]).toEqual(["has", "median_value"]);
+    expect(fillColorExpression("ppsf", COLOR_STOPS)[1]).toEqual(["has", "ppsf"]);
   });
 });
 

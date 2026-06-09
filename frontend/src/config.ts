@@ -1,5 +1,7 @@
-// Single source of truth for shared map/legend constants. The color ramp lives
+// Single source of truth for shared map/legend constants. The color ramps live
 // here so the choropleth and the legend can never drift apart (R2).
+
+import { formatPct, formatPpsf, formatUsdCompact } from "./lib/format";
 
 // Backend API base. In dev, Vite proxies /api -> http://localhost:8000, so the
 // frontend only ever calls its own origin — no Mapbox token reaches the client (R5).
@@ -40,8 +42,68 @@ export const COLOR_STOPS: ColorStop[] = [
   { value: 1_800_000, color: "#08519c" },
 ];
 
+// Diverging ramp for year-over-year % change, centered on 0 (red = falling,
+// green = rising), clamped to ±6% so the metro's mid-range stays legible.
+export const YOY_STOPS: ColorStop[] = [
+  { value: -6, color: "#d73027" },
+  { value: -3, color: "#fc8d59" },
+  { value: 0, color: "#ffffbf" },
+  { value: 3, color: "#91cf60" },
+  { value: 6, color: "#1a9850" },
+];
+
+// Sequential ramp for sold price per square foot ($). Breaks spread the metro
+// (most ZIPs ~$200–$700/sqft; a few enclaves clamp to the top).
+export const PPSF_STOPS: ColorStop[] = [
+  { value: 200, color: "#f2f0f7" },
+  { value: 350, color: "#cbc9e2" },
+  { value: 500, color: "#9e9ac8" },
+  { value: 700, color: "#756bb1" },
+  { value: 1000, color: "#54278f" },
+];
+
 // ZIPs with no value in the dataset.
 export const NO_DATA_COLOR = "#d9d9d9";
+
+// The metrics the choropleth can shade by. `property` is the GeoJSON feature
+// property; `format` labels legend boundaries. YoY is the only diverging ramp.
+export type MetricKey = "value" | "yoy" | "ppsf";
+
+export interface MetricDef {
+  key: MetricKey;
+  label: string;
+  property: string;
+  stops: ColorStop[];
+  diverging: boolean;
+  format: (value: number) => string;
+}
+
+export const METRICS: MetricDef[] = [
+  {
+    key: "value",
+    label: "Median value",
+    property: "median_value",
+    stops: COLOR_STOPS,
+    diverging: false,
+    format: formatUsdCompact,
+  },
+  {
+    key: "yoy",
+    label: "YoY change",
+    property: "yoy_pct",
+    stops: YOY_STOPS,
+    diverging: true,
+    format: formatPct,
+  },
+  {
+    key: "ppsf",
+    label: "$/sqft",
+    property: "ppsf",
+    stops: PPSF_STOPS,
+    diverging: false,
+    format: formatPpsf,
+  },
+];
 
 // Opacity applied to over-budget ZIPs vs. in-budget ZIPs (R4 de-emphasis).
 export const OVER_BUDGET_OPACITY = 0.15;
