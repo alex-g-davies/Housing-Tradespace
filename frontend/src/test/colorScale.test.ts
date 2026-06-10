@@ -7,6 +7,7 @@ import {
   fillColorExpression,
   fillOpacityExpression,
   isOverBudget,
+  metricValuesFromFeatures,
 } from "../lib/colorScale";
 
 describe("colorForValue (R2)", () => {
@@ -66,6 +67,25 @@ describe("computeQuantileStops (national adaptive ramps)", () => {
 
   it("ignores null/NaN and falls back when empty", () => {
     expect(computeQuantileStops([null, NaN, undefined], colors)).toHaveLength(colors.length);
+  });
+
+  it("puts the top break near the high end (≈95th pct), not clamped at the 80th", () => {
+    const values = Array.from({ length: 100 }, (_, i) => i + 1); // 1..100
+    const stops = computeQuantileStops(values, colors);
+    expect(stops[stops.length - 1].value).toBeGreaterThanOrEqual(90); // ~p95, not p80=80
+    expect(stops[0].value).toBeLessThanOrEqual(5); // ~p2
+  });
+});
+
+describe("metricValuesFromFeatures", () => {
+  it("reads the numeric property and drops null/non-number", () => {
+    const features = [
+      { properties: { median_value: 500000 } },
+      { properties: { median_value: null } },
+      { properties: {} },
+      { properties: { median_value: 750000 } },
+    ];
+    expect(metricValuesFromFeatures(features, "median_value")).toEqual([500000, 750000]);
   });
 });
 

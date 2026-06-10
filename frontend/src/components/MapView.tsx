@@ -16,7 +16,12 @@ import {
   type WorkLocation,
 } from "../config";
 import type { ZipValue } from "../api/client";
-import { fillColorExpression, fillOpacityExpression } from "../lib/colorScale";
+import {
+  computeQuantileStops,
+  fillColorExpression,
+  fillOpacityExpression,
+  metricValuesFromFeatures,
+} from "../lib/colorScale";
 import { buildZipPopupHtml } from "../lib/popup";
 
 interface Props {
@@ -24,7 +29,8 @@ interface Props {
   isochrone: FeatureCollection | null;
   records: Map<string, ZipValue>;
   activeMetric: MetricDef;
-  stops: ColorStop[];
+  /** Reports the resolved (viewport-adaptive) ramp stops up for the legend. */
+  onViewportStops: (stops: ColorStop[]) => void;
   budget: number;
   work: WorkLocation;
   onWorkChange: (lat: number, lon: number) => void;
@@ -64,7 +70,7 @@ export default function MapView({
   isochrone,
   records,
   activeMetric,
-  stops,
+  onViewportStops,
   budget,
   work,
   onWorkChange,
@@ -95,8 +101,33 @@ export default function MapView({
   recordsRef.current = records;
   const metricRef = useRef(activeMetric);
   metricRef.current = activeMetric;
-  const stopsRef = useRef(stops);
-  stopsRef.current = stops;
+  const onViewportStopsRef = useRef(onViewportStops);
+  onViewportStopsRef.current = onViewportStops;
+  const recomputeTimer = useRef<number | null>(null);
+
+  // Recompute the choropleth ramp from the ZIPs currently in view (or all source
+  // features before the first render), so a uniformly-priced area still spans the
+  // full ramp. YoY keeps its fixed scale. Reports the stops up for the legend.
+  function recomputeStops() {
+    const m = map.current;
+    if (!m || !loaded.current || !m.getLayer(ZIP_FILL)) return;
+    const metric = metricRef.current;
+    let stops = metric.fixedStops;
+    if (!stops) {
+      let feats = m.queryRenderedFeatures({ layers: [ZIP_FILL] }) as {
+        properties?: Record<string, unknown> | null;
+      }[];
+      if (feats.length === 0) feats = (geojsonRef.current?.features ?? []) as typeof feats;
+      stops = computeQuantileStops(metricValuesFromFeatures(feats, metric.property), metric.colors);
+    }
+    m.setPaintProperty(ZIP_FILL, "fill-color", fillColorExpression(metric.property, stops) as never);
+    onViewportStopsRef.current(stops);
+  }
+
+  function scheduleRecompute() {
+    if (recomputeTimer.current) window.clearTimeout(recomputeTimer.current);
+    recomputeTimer.current = window.setTimeout(recomputeStops, 180);
+  }
 
   // Create the map once.
   useEffect(() => {
@@ -142,6 +173,9 @@ export default function MapView({
       info.remove();
     });
 
+    // Pan/zoom re-spreads the ramp across what's now visible (debounced).
+    m.on("moveend", scheduleRecompute);
+
     m.on("load", () => {
       loaded.current = true;
       syncZips();
@@ -149,6 +183,7 @@ export default function MapView({
     });
     map.current = m;
     return () => {
+      if (recomputeTimer.current) window.clearTimeout(recomputeTimer.current);
       m.remove();
       map.current = null;
       marker.current = null;
@@ -166,6 +201,7 @@ export default function MapView({
     const existing = m.getSource(ZIP_SOURCE) as maplibregl.GeoJSONSource | undefined;
     if (existing) {
       existing.setData(data as never);
+      m.once("idle", recomputeStops); // re-spread the ramp for the new data
       return;
     }
     m.addSource(ZIP_SOURCE, { type: "geojson", data: data as never });
@@ -173,16 +209,20 @@ export default function MapView({
     // roads, and labels all render on top — the basemap's accurate water masks
     // the ZIP colors over Puget Sound / lakes without clipping the geometry.
     const anchor = waterLayerId(m) ?? firstSymbolLayerId(m);
+    const metric = metricRef.current;
+    const initialStops =
+      metric.fixedStops ??
+      computeQuantileStops(
+        metricValuesFromFeatures(data.features as never[], metric.property),
+        metric.colors,
+      );
     m.addLayer(
       {
         id: ZIP_FILL,
         type: "fill",
         source: ZIP_SOURCE,
         paint: {
-          "fill-color": fillColorExpression(
-            metricRef.current.property,
-            stopsRef.current,
-          ) as never,
+          "fill-color": fillColorExpression(metric.property, initialStops) as never,
           "fill-opacity": fillOpacityExpression(
             budgetRef.current,
             IN_BUDGET_OPACITY,
@@ -192,6 +232,8 @@ export default function MapView({
       },
       anchor,
     );
+    onViewportStopsRef.current(initialStops);
+    m.once("idle", recomputeStops); // refine to the viewport once rendered
     m.addLayer(
       {
         id: "zip-border",
@@ -262,16 +304,11 @@ export default function MapView({
     );
   }, [budget]);
 
-  // Switching the active metric OR the per-region ramp re-shades the choropleth.
+  // Switching the active metric re-shades the choropleth from the current view.
   useEffect(() => {
-    const m = map.current;
-    if (!m || !loaded.current || !m.getLayer(ZIP_FILL)) return;
-    m.setPaintProperty(
-      ZIP_FILL,
-      "fill-color",
-      fillColorExpression(activeMetric.property, stops) as never,
-    );
-  }, [activeMetric, stops]);
+    recomputeStops();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMetric]);
 
   // Fit the map to the selected region's bounds (skip the initial mount so the
   // opening Seattle view is preserved).

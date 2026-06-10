@@ -4,6 +4,7 @@ import { type CommuteVariation, type RegionInfo, getRegions } from "./api/client
 import ControlsPanel from "./components/ControlsPanel";
 import MapView from "./components/MapView";
 import {
+  type ColorStop,
   DEFAULT_MINUTES,
   DEFAULT_WORK,
   METRICS,
@@ -36,14 +37,20 @@ export default function App() {
 
   const region = regions.find((r) => r.code === stateCode) ?? null;
 
-  // Per-region adaptive ramp: quantile breaks from this region's distribution
-  // (a fixed national scale would wash out cheap/pricey states).
-  const stops = useMemo(() => {
+  // Adaptive ramp: MapView reports breaks computed from the ZIPs currently in
+  // view (viewport-adaptive); until it does, fall back to the whole-region
+  // quantiles so the legend has something to show.
+  const recordStops = useMemo(() => {
     const values = [...records.values()].map(
       (r) => (r as unknown as Record<string, number | null>)[activeMetric.property] ?? null,
     );
     return resolveStops(activeMetric, values);
   }, [records, activeMetric]);
+  const [viewportStops, setViewportStops] = useState<ColorStop[] | null>(null);
+  useEffect(() => {
+    setViewportStops(null); // reset when the metric or region changes
+  }, [activeMetric, stateCode]);
+  const stops = viewportStops ?? recordStops;
 
   const variation =
     (isochrone as { properties?: { variation?: CommuteVariation } } | null)?.properties
@@ -75,7 +82,7 @@ export default function App() {
         isochrone={isochrone}
         records={records}
         activeMetric={activeMetric}
-        stops={stops}
+        onViewportStops={setViewportStops}
         budget={budget}
         work={work}
         onWorkChange={handleWorkDrag}

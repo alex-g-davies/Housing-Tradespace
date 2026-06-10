@@ -4,14 +4,18 @@
 import { COLOR_STOPS, type ColorStop, type MetricDef, NO_DATA_COLOR } from "../config";
 
 /**
- * Quantile color stops for a region's value distribution: one break per color at
- * the 0,1/n,2/n,… quantiles, so each region spreads across the whole ramp.
- * Ties are nudged to keep breaks strictly ascending (MapLibre interpolate needs
- * increasing inputs). Falls back to evenly-indexed breaks if data is degenerate.
+ * Quantile color stops for a distribution: `n` breaks at evenly spaced ranks
+ * spanning [loQ, hiQ] (default 2nd–95th percentile), so the ramp covers the bulk
+ * of the data with gradation at the top instead of clamping a 20% chunk to the
+ * darkest color, and a lone outlier doesn't stretch the scale. Ties are nudged
+ * to keep breaks strictly ascending (MapLibre interpolate needs increasing
+ * inputs). Falls back to evenly-indexed breaks if data is degenerate.
  */
 export function computeQuantileStops(
   values: (number | null | undefined)[],
   colors: string[],
+  loQ = 0.02,
+  hiQ = 0.95,
 ): ColorStop[] {
   const clean = values
     .filter((v): v is number => v != null && !Number.isNaN(v))
@@ -21,12 +25,26 @@ export function computeQuantileStops(
 
   const stops: ColorStop[] = [];
   for (let i = 0; i < n; i++) {
-    const idx = Math.floor((i / n) * (clean.length - 1));
+    const q = n === 1 ? loQ : loQ + ((hiQ - loQ) * i) / (n - 1);
+    const idx = Math.min(clean.length - 1, Math.max(0, Math.round(q * (clean.length - 1))));
     let value = clean[idx];
     if (i > 0 && value <= stops[i - 1].value) value = stops[i - 1].value + 1;
     stops.push({ value, color: colors[i] });
   }
   return stops;
+}
+
+/** Read a numeric metric property off MapLibre/GeoJSON features, dropping nulls. */
+export function metricValuesFromFeatures(
+  features: { properties?: Record<string, unknown> | null }[],
+  property: string,
+): number[] {
+  const out: number[] = [];
+  for (const f of features) {
+    const v = f.properties?.[property];
+    if (typeof v === "number" && !Number.isNaN(v)) out.push(v);
+  }
+  return out;
 }
 
 /** Resolve the ramp stops for a metric: fixed (YoY) or per-region quantiles. */
