@@ -24,3 +24,13 @@ class GeocodeResult(BaseModel):
     lat: float
     lon: float
     place_name: str
+
+
+class RegionInfo(BaseModel):
+    """A selectable state: name + map bounds/center for the picker (national)."""
+
+    code: str
+    name: str
+    bbox: list[float] | None = None  # [minLon, minLat, maxLon, maxLat]
+    center: list[float] | None = None  # [lon, lat]
+    zip_count: int

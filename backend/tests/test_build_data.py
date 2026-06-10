@@ -61,3 +61,25 @@ def test_build_redfin_picks_latest_all_residential_ppsf(tmp_path):
 
     out = build_data.build_redfin(str(path), {"98103", "98199"})
     assert out == {"98103": 640.0}  # latest period, All Residential, in-set, non-null
+
+
+def test_state_name():
+    assert build_data.state_name("WA") == "Washington"
+    assert build_data.state_name("NY") == "New York"
+    assert build_data.state_name("DC") == "District Of Columbia"
+
+
+def test_parse_zhvi_national_groups_by_state():
+    csv = (
+        "RegionName,State,2025-04-30,2026-04-30\n"
+        "98101,WA,700000,720000\n"
+        "98103,WA,900000,937500\n"
+        "43001,OH,150000,160000\n"
+        "00000,,,\n"  # missing state + value -> skipped
+    )
+    as_of, by_state = build_data.parse_zhvi_national(csv)
+    assert as_of == "2026-04-30"
+    assert set(by_state) == {"WA", "OH"}
+    assert [r["zip"] for r in by_state["WA"]] == ["98101", "98103"]
+    assert by_state["WA"][0]["median_value"] == 720000
+    assert by_state["OH"][0]["median_value"] == 160000

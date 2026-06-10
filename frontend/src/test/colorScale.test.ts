@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { COLOR_STOPS, NO_DATA_COLOR, YOY_STOPS } from "../config";
 import {
   colorForValue,
+  computeQuantileStops,
   fillColorExpression,
   fillOpacityExpression,
   isOverBudget,
@@ -43,6 +44,28 @@ describe("isOverBudget (R4)", () => {
     expect(isOverBudget(null, 800_000)).toBe(false);
     expect(isOverBudget(900_000, 0)).toBe(false);
     expect(isOverBudget(900_000, null)).toBe(false);
+  });
+});
+
+describe("computeQuantileStops (national adaptive ramps)", () => {
+  const colors = ["a", "b", "c", "d", "e"];
+
+  it("spreads breaks across the value distribution, ascending", () => {
+    const values = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+    const stops = computeQuantileStops(values, colors);
+    expect(stops).toHaveLength(colors.length);
+    expect(stops[0].value).toBe(100); // min
+    for (let i = 1; i < stops.length; i++) expect(stops[i].value).toBeGreaterThan(stops[i - 1].value);
+    expect(stops.map((s) => s.color)).toEqual(colors);
+  });
+
+  it("keeps breaks strictly ascending even with heavy ties", () => {
+    const stops = computeQuantileStops([5, 5, 5, 5, 5], colors);
+    for (let i = 1; i < stops.length; i++) expect(stops[i].value).toBeGreaterThan(stops[i - 1].value);
+  });
+
+  it("ignores null/NaN and falls back when empty", () => {
+    expect(computeQuantileStops([null, NaN, undefined], colors)).toHaveLength(colors.length);
   });
 });
 

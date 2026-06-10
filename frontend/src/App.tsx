@@ -1,6 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { CommuteVariation } from "./api/client";
+import { type CommuteVariation, type RegionInfo, getRegions } from "./api/client";
 import ControlsPanel from "./components/ControlsPanel";
 import MapView from "./components/MapView";
 import {
@@ -11,37 +11,62 @@ import {
   type WorkLocation,
 } from "./config";
 import { useMapData } from "./hooks/useMapData";
+import { resolveStops } from "./lib/colorScale";
+
+const DEFAULT_STATE = "WA";
 
 export default function App() {
   const [budget, setBudget] = useState(0);
   const [metricKey, setMetricKey] = useState<MetricKey>("value");
   const [minutes, setMinutes] = useState<number>(DEFAULT_MINUTES);
   const [work, setWork] = useState<WorkLocation>(DEFAULT_WORK);
-  const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
-  // Bumped whenever the work point changes programmatically (address / reset) so
-  // the map flies to it. Dragging the pin does NOT bump this — no jarring recenter.
+  const [regions, setRegions] = useState<RegionInfo[]>([]);
+  const [stateCode, setStateCode] = useState<string>(DEFAULT_STATE);
+  // Bumped on programmatic work moves (address / reset) so the map flies there.
   const [recenter, setRecenter] = useState(0);
-  const { geojson, isochrone, records, loading, error } = useMapData(work, minutes);
 
-  // The commute variation summary rides on the isochrone collection's properties
-  // (a non-standard top-level field, so the FeatureCollection is cast).
+  const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
+  const { geojson, isochrone, records, loading, error } = useMapData(stateCode, work, minutes);
+
+  useEffect(() => {
+    getRegions()
+      .then(setRegions)
+      .catch(() => {});
+  }, []);
+
+  const region = regions.find((r) => r.code === stateCode) ?? null;
+
+  // Per-region adaptive ramp: quantile breaks from this region's distribution
+  // (a fixed national scale would wash out cheap/pricey states).
+  const stops = useMemo(() => {
+    const values = [...records.values()].map(
+      (r) => (r as unknown as Record<string, number | null>)[activeMetric.property] ?? null,
+    );
+    return resolveStops(activeMetric, values);
+  }, [records, activeMetric]);
+
   const variation =
     (isochrone as { properties?: { variation?: CommuteVariation } } | null)?.properties
       ?.variation ?? null;
 
-  const handleWorkDrag = useCallback((lat: number, lon: number) => {
-    setWork({ lat, lon });
-  }, []);
-
+  const handleWorkDrag = useCallback((lat: number, lon: number) => setWork({ lat, lon }), []);
   const handleAddressLocated = useCallback((lat: number, lon: number) => {
     setWork({ lat, lon });
     setRecenter((n) => n + 1);
   }, []);
-
   const handleResetWork = useCallback(() => {
     setWork(DEFAULT_WORK);
     setRecenter((n) => n + 1);
   }, []);
+
+  const handleStateChange = useCallback(
+    (code: string) => {
+      setStateCode(code);
+      const r = regions.find((x) => x.code === code);
+      if (r?.center) setWork({ lat: r.center[1], lon: r.center[0] });
+    },
+    [regions],
+  );
 
   return (
     <div className="app">
@@ -50,15 +75,21 @@ export default function App() {
         isochrone={isochrone}
         records={records}
         activeMetric={activeMetric}
+        stops={stops}
         budget={budget}
         work={work}
         onWorkChange={handleWorkDrag}
         recenterSignal={recenter}
+        fitBbox={region?.bbox ?? null}
       />
       <ControlsPanel
+        regions={regions}
+        state={stateCode}
+        onStateChange={handleStateChange}
         budget={budget}
         onBudgetChange={setBudget}
         activeMetric={activeMetric}
+        stops={stops}
         metricKey={metricKey}
         onMetricChange={setMetricKey}
         minutes={minutes}
@@ -67,7 +98,7 @@ export default function App() {
         work={work}
         onResetWork={handleResetWork}
         onAddressLocated={handleAddressLocated}
-        metroLabel="Seattle–Tacoma–Bellevue, WA"
+        metroLabel={region?.name ?? "Washington"}
       />
       {loading && <div className="status">Loading map…</div>}
       {error && <div className="status status--error">Couldn’t load map data: {error}</div>}

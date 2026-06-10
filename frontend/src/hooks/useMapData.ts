@@ -20,29 +20,30 @@ const EMPTY: Map<string, ZipValue> = new Map();
  * isochrone whenever the work location changes. The choropleth is the critical
  * layer; the isochrone is best-effort.
  */
-export function useMapData(work: WorkLocation, minutes: number): MapData {
+export function useMapData(state: string, work: WorkLocation, minutes: number): MapData {
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
   const [isochrone, setIsochrone] = useState<FeatureCollection | null>(null);
   const [records, setRecords] = useState<Map<string, ZipValue>>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Choropleth geometry — fetched once.
+  // Choropleth geometry — refetched when the selected state changes.
   useEffect(() => {
     let cancelled = false;
-    getZipsGeojson()
-      .then((fc) => !cancelled && setGeojson(fc))
+    setLoading(true);
+    getZipsGeojson(state)
+      .then((fc) => !cancelled && (setGeojson(fc), setError(null)))
       .catch((e) => !cancelled && setError(String(e)))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [state]);
 
-  // Per-ZIP enriched records (for popups) — fetched once.
+  // Per-ZIP enriched records (for popups + adaptive ramps) — refetched per state.
   useEffect(() => {
     let cancelled = false;
-    getHousing()
+    getHousing(state)
       .then((h) => !cancelled && setRecords(new Map(h.zips.map((z) => [z.zip, z]))))
       .catch(() => {
         /* popups degrade to geometry-only if this fails */
@@ -50,7 +51,7 @@ export function useMapData(work: WorkLocation, minutes: number): MapData {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [state]);
 
   // Commute isochrone — refetched when the work location or commute time changes.
   useEffect(() => {

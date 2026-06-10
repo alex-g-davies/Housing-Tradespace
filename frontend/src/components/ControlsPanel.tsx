@@ -1,15 +1,20 @@
-import type { CommuteVariation } from "../api/client";
-import type { MetricDef, MetricKey, WorkLocation } from "../config";
+import type { CommuteVariation, RegionInfo } from "../api/client";
+import type { ColorStop, MetricDef, MetricKey, WorkLocation } from "../config";
 import AddressSearch from "./AddressSearch";
 import BudgetInput from "./BudgetInput";
 import CommuteControl from "./CommuteControl";
 import Legend from "./Legend";
 import MetricSwitcher from "./MetricSwitcher";
+import RegionPicker from "./RegionPicker";
 
 interface Props {
+  regions: RegionInfo[];
+  state: string;
+  onStateChange: (code: string) => void;
   budget: number;
   onBudgetChange: (budget: number) => void;
   activeMetric: MetricDef;
+  stops: ColorStop[];
   metricKey: MetricKey;
   onMetricChange: (key: MetricKey) => void;
   minutes: number;
@@ -21,11 +26,15 @@ interface Props {
   metroLabel: string;
 }
 
-/** Floating panel: title, budget, work-location controls, metric switcher, legend. */
+/** Floating panel: title, region picker, budget, work controls, switcher, legend. */
 export default function ControlsPanel({
+  regions,
+  state,
+  onStateChange,
   budget,
   onBudgetChange,
   activeMetric,
+  stops,
   metricKey,
   onMetricChange,
   minutes,
@@ -40,6 +49,10 @@ export default function ControlsPanel({
     <div className="panel">
       <h1 className="panel-title">tradespace</h1>
       <p className="panel-subtitle">{metroLabel}</p>
+
+      {regions.length > 0 && (
+        <RegionPicker regions={regions} state={state} onStateChange={onStateChange} />
+      )}
 
       <BudgetInput budget={budget} onChange={onBudgetChange} />
 
@@ -63,7 +76,7 @@ export default function ControlsPanel({
 
       <span className="section-label">Shade map by</span>
       <MetricSwitcher active={metricKey} onChange={onMetricChange} />
-      <Legend metric={activeMetric} budget={budget} />
+      <Legend metric={activeMetric} stops={stops} budget={budget} />
 
       <p className="panel-foot">
         Hover or tap a ZIP for its metrics · 30-min drive-time overlay

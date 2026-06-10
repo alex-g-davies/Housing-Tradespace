@@ -1,16 +1,17 @@
-"""Shared pytest fixtures: a TestClient with settings + data store overridden to
-point at small test fixtures, and a clean isochrone cache per test."""
+"""Shared pytest fixtures: a TestClient pointed at a temp per-state dataset (built
+from the sample fixtures) and a fake token, plus clean caches per test."""
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app import data_loader
 from app import geocode as geo_module
 from app import isochrone as iso_module
 from app.config import Settings, get_settings
-from app.data_loader import DataStore, get_data_store, merge_geojson, parse_housing
 from app.main import app
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -38,20 +39,55 @@ def _clear_caches():
     geo_module.clear_cache()
 
 
-@pytest.fixture
-def fixture_store() -> DataStore:
-    with open(FIXTURES / "sample_zhvi.json", encoding="utf-8") as f:
-        housing = parse_housing(json.load(f))
-    with open(FIXTURES / "sample_zcta.geojson", encoding="utf-8") as f:
-        geojson = merge_geojson(json.load(f), housing.records)
-    return DataStore(housing=housing, geojson=geojson)
+@pytest.fixture(autouse=True)
+def _state_data(tmp_path, monkeypatch):
+    """Point the loader at a temp 2-state dataset (WA from the sample fixtures +
+    a minimal OH) so the region-scoped endpoints have data."""
+    sdir = tmp_path / "states"
+    sdir.mkdir()
+
+    sample = json.loads((FIXTURES / "sample_zhvi.json").read_text(encoding="utf-8"))
+    wa = {"state": "WA", "name": "Washington", "as_of": sample["as_of"], "zips": sample["zips"]}
+    (sdir / "WA.zhvi.json").write_text(json.dumps(wa), encoding="utf-8")
+    shutil.copy(FIXTURES / "sample_zcta.geojson", sdir / "WA.geojson")
+
+    (sdir / "OH.zhvi.json").write_text(
+        json.dumps(
+            {"state": "OH", "name": "Ohio", "as_of": "2024-12-31",
+             "zips": [{"zip": "43001", "median_value": 160000}]}
+        ),
+        encoding="utf-8",
+    )
+    (sdir / "OH.geojson").write_text(
+        json.dumps(
+            {"type": "FeatureCollection", "features": [
+                {"type": "Feature", "properties": {"zip": "43001"},
+                 "geometry": {"type": "Polygon", "coordinates":
+                              [[[-82.7, 40.0], [-82.6, 40.0], [-82.6, 40.1], [-82.7, 40.1],
+                                [-82.7, 40.0]]]}}]}
+        ),
+        encoding="utf-8",
+    )
+    regions = [
+        {"code": "WA", "name": "Washington", "bbox": [-122.36, 47.6, -122.28, 47.7],
+         "center": [-122.32, 47.65], "zip_count": 5},
+        {"code": "OH", "name": "Ohio", "bbox": [-82.7, 40.0, -82.6, 40.1],
+         "center": [-82.65, 40.05], "zip_count": 1},
+    ]
+    rfile = tmp_path / "regions.json"
+    rfile.write_text(json.dumps(regions), encoding="utf-8")
+
+    monkeypatch.setattr(data_loader, "STATES_DIR", sdir)
+    monkeypatch.setattr(data_loader, "REGIONS_FILE", rfile)
+    data_loader.get_data_store.cache_clear()
+    data_loader.load_regions.cache_clear()
+    yield
+    data_loader.get_data_store.cache_clear()
+    data_loader.load_regions.cache_clear()
 
 
 @pytest.fixture
-def client(fixture_store):
-    """TestClient wired to fixture data and a fake token (Mapbox not called by
-    default — individual tests opt into live or fixture isochrone mode)."""
-    app.dependency_overrides[get_data_store] = lambda: fixture_store
+def client():
     app.dependency_overrides[get_settings] = lambda: _make_settings()
     with TestClient(app) as c:
         yield c
@@ -59,11 +95,10 @@ def client(fixture_store):
 
 
 @pytest.fixture
-def make_client(fixture_store):
+def make_client():
     """Factory to build a client with custom settings overrides."""
 
     def _factory(**overrides):
-        app.dependency_overrides[get_data_store] = lambda: fixture_store
         app.dependency_overrides[get_settings] = lambda: _make_settings(**overrides)
         return TestClient(app)
 

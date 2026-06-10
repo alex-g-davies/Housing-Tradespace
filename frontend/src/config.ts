@@ -65,8 +65,15 @@ export const PPSF_STOPS: ColorStop[] = [
 // ZIPs with no value in the dataset.
 export const NO_DATA_COLOR = "#d9d9d9";
 
+// Ramp colors (sequential). Break VALUES are computed at runtime from each
+// region's distribution (quantiles) so a cheap state and a pricey state both
+// spread across the full ramp — a fixed nationwide scale would wash most out.
+export const VALUE_COLORS = COLOR_STOPS.map((s) => s.color);
+export const PPSF_COLORS = PPSF_STOPS.map((s) => s.color);
+
 // The metrics the choropleth can shade by. `property` is the GeoJSON feature
-// property; `format` labels legend boundaries. YoY is the only diverging ramp.
+// property; `fixedStops` (YoY only — a comparable % scale) overrides the
+// per-region quantile breaks. `format` labels legend boundaries.
 export type MetricKey = "value" | "yoy" | "ppsf";
 
 export interface MetricDef {
@@ -74,9 +81,10 @@ export interface MetricDef {
   label: string; // full label (legend title, a11y)
   short: string; // compact label for the switcher button
   property: string;
-  stops: ColorStop[];
+  colors: string[];
   diverging: boolean;
   format: (value: number) => string;
+  fixedStops?: ColorStop[]; // when set, skip per-region quantile breaks
 }
 
 export const METRICS: MetricDef[] = [
@@ -85,7 +93,7 @@ export const METRICS: MetricDef[] = [
     label: "Median value",
     short: "Value",
     property: "median_value",
-    stops: COLOR_STOPS,
+    colors: VALUE_COLORS,
     diverging: false,
     format: formatUsdCompact,
   },
@@ -94,16 +102,17 @@ export const METRICS: MetricDef[] = [
     label: "YoY change",
     short: "YoY",
     property: "yoy_pct",
-    stops: YOY_STOPS,
+    colors: YOY_STOPS.map((s) => s.color),
     diverging: true,
     format: formatPct,
+    fixedStops: YOY_STOPS,
   },
   {
     key: "ppsf",
     label: "$/sqft",
     short: "$/sqft",
     property: "ppsf",
-    stops: PPSF_STOPS,
+    colors: PPSF_COLORS,
     diverging: false,
     format: formatPpsf,
   },

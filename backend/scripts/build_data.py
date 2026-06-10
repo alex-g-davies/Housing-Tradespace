@@ -1,19 +1,18 @@
-"""Preprocess raw public datasets into the small committed files the app serves.
+"""Preprocess raw public datasets into the small per-state files the app serves.
 
-Run once by a human; the OUTPUTS (data/seattle_zhvi.json, data/seattle_zcta.geojson)
-are committed, the raw inputs are not. Sources are free/aggregate (R-constraint):
+Run once by a human; the OUTPUTS (data/states/{ST}.geojson, data/states/{ST}.zhvi.json,
+data/regions.json) are committed, the raw inputs are not. Sources are free/aggregate:
 
-  - Zillow ZHVI by ZIP (median home value):
-    https://files.zillowstatic.com/research/public_csvs/zhvi/Zip_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv
-  - WA ZIP-code (ZCTA) boundaries GeoJSON (OpenDataDE mirror of Census TIGER):
-    https://raw.githubusercontent.com/OpenDataDE/State-zip-code-GeoJSON/master/wa_washington_zip_codes_geo.min.json
+  - Zillow ZHVI by ZIP (median home value): national CSV (~122 MB), filtered + grouped by state.
+  - Per-state ZIP (ZCTA) boundaries GeoJSON (OpenDataDE mirror of Census TIGER).
+  - Optional Redfin zip_code_market_tracker for sold $/sqft (very large).
 
 Usage (from backend/):
-    python scripts/build_data.py                 # download both, filter Seattle
-    python scripts/build_data.py --zhvi-path raw/zhvi.csv --geo-path raw/wa.json
-    python scripts/build_data.py --metro Seattle --tolerance 0.0005
+    python scripts/build_data.py                      # all states (huge: ~1 GB of downloads)
+    python scripts/build_data.py --states WA,OR,CA    # just these states (dev)
+    python scripts/build_data.py --states WA --redfin-url   # + national $/sqft
 
-Attribution: Zillow Research (ZHVI) and U.S. Census Bureau (ZCTA) — note in README.
+Attribution: Zillow Research (ZHVI), U.S. Census Bureau (ZCTA), Redfin Data Center.
 """
 
 from __future__ import annotations
@@ -29,6 +28,7 @@ from pathlib import Path
 import httpx
 import pandas as pd
 from shapely.geometry import mapping, shape
+from shapely.ops import unary_union
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BACKEND_DIR / "data"
@@ -37,12 +37,7 @@ ZHVI_URL = (
     "https://files.zillowstatic.com/research/public_csvs/zhvi/"
     "Zip_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
 )
-GEO_URL = (
-    "https://raw.githubusercontent.com/OpenDataDE/State-zip-code-GeoJSON/"
-    "master/wa_washington_zip_codes_geo.min.json"
-)
-# Optional $/sqft source (large: >4 GB uncompressed). Off unless --redfin-url or
-# --redfin-path is given. `median_ppsf` is LIST price/sqft of active listings.
+GEO_BASE = "https://raw.githubusercontent.com/OpenDataDE/State-zip-code-GeoJSON/master/"
 REDFIN_URL = (
     "https://redfin-public-data.s3.us-west-2.amazonaws.com/"
     "redfin_market_tracker/zip_code_market_tracker.tsv000.gz"
@@ -52,9 +47,32 @@ _ZIP_RE = re.compile(r"\d{5}")
 # Census/OpenDataDE may key the ZIP under any of these property names.
 ZIP_PROP_CANDIDATES = ("ZCTA5CE20", "ZCTA5CE10", "ZCTA5CE", "zip", "ZIP", "GEOID20")
 
+# 2-letter state code -> OpenDataDE file slug (lowercase, underscores).
+STATE_SLUGS = {
+    "AL": "al_alabama", "AK": "ak_alaska", "AZ": "az_arizona", "AR": "ar_arkansas",
+    "CA": "ca_california", "CO": "co_colorado", "CT": "ct_connecticut", "DE": "de_delaware",
+    "DC": "dc_district_of_columbia", "FL": "fl_florida", "GA": "ga_georgia", "HI": "hi_hawaii",
+    "ID": "id_idaho", "IL": "il_illinois", "IN": "in_indiana", "IA": "ia_iowa",
+    "KS": "ks_kansas", "KY": "ky_kentucky", "LA": "la_louisiana", "ME": "me_maine",
+    "MD": "md_maryland", "MA": "ma_massachusetts", "MI": "mi_michigan", "MN": "mn_minnesota",
+    "MS": "ms_mississippi", "MO": "mo_missouri", "MT": "mt_montana", "NE": "ne_nebraska",
+    "NV": "nv_nevada", "NH": "nh_new_hampshire", "NJ": "nj_new_jersey", "NM": "nm_new_mexico",
+    "NY": "ny_new_york", "NC": "nc_north_carolina", "ND": "nd_north_dakota", "OH": "oh_ohio",
+    "OK": "ok_oklahoma", "OR": "or_oregon", "PA": "pa_pennsylvania", "RI": "ri_rhode_island",
+    "SC": "sc_south_carolina", "SD": "sd_south_dakota", "TN": "tn_tennessee", "TX": "tx_texas",
+    "UT": "ut_utah", "VT": "vt_vermont", "VA": "va_virginia", "WA": "wa_washington",
+    "WV": "wv_west_virginia", "WI": "wi_wisconsin", "WY": "wy_wyoming",
+}
+
+
+def state_name(code: str) -> str:
+    """'WA' -> 'Washington'."""
+    slug = STATE_SLUGS.get(code, code.lower())
+    return slug.split("_", 1)[1].replace("_", " ").title() if "_" in slug else code
+
 
 def _fetch_text(url: str) -> str:
-    with httpx.Client(timeout=120, follow_redirects=True) as c:
+    with httpx.Client(timeout=180, follow_redirects=True) as c:
         r = c.get(url)
         r.raise_for_status()
         return r.text
@@ -106,33 +124,30 @@ def downsample_quarterly(date_cols, row, max_points: int = 20) -> list[list]:
     return [[q, v] for q, v in items]
 
 
-def build_zhvi(zhvi_csv: str, metro_substr: str) -> tuple[dict, list[dict]]:
-    """Filter ZHVI to the metro and return (json_payload, records).
+def parse_zhvi_national(zhvi_csv: str) -> tuple[str, dict[str, list[dict]]]:
+    """Parse the national ZHVI CSV into (as_of, {state_code: [records]}).
 
-    Each record carries median_value plus the ZHVI-derived metrics (yoy_pct,
-    cagr5_pct, history); optional metrics are omitted when unavailable."""
+    Each record carries median_value plus ZHVI-derived metrics (yoy_pct, cagr5_pct,
+    history); optional metrics are omitted when unavailable."""
     df = pd.read_csv(StringIO(zhvi_csv))
     date_cols = [c for c in df.columns if c[:4].isdigit() and "-" in c]
     if not date_cols:
         raise SystemExit("No date columns found in ZHVI CSV — format changed?")
     latest = date_cols[-1]
-    # Columns are monthly and contiguous, so index positionally: 12 months and
-    # 60 months (5 years) before the latest.
     col_12 = date_cols[-13] if len(date_cols) >= 13 else None
     col_60 = date_cols[-61] if len(date_cols) >= 61 else None
 
-    sub = df[df["Metro"].fillna("").str.contains(metro_substr, case=False)]
-    records: list[dict] = []
+    by_state: dict[str, list[dict]] = {}
     skipped = 0
-    for _, row in sub.iterrows():
+    for _, row in df.iterrows():
+        st = str(row.get("State") or "").strip().upper()
         z = normalize_zip(row["RegionName"])
         v = row[latest]
-        if z is None or pd.isna(v) or v <= 0:
+        if not st or z is None or pd.isna(v) or v <= 0:
             skipped += 1
             continue
         value = float(v)
         rec: dict = {"zip": z, "median_value": int(round(value))}
-
         if col_12 is not None and not pd.isna(row[col_12]):
             yoy = pct_change(float(row[col_12]), value)
             if yoy is not None:
@@ -144,13 +159,14 @@ def build_zhvi(zhvi_csv: str, metro_substr: str) -> tuple[dict, list[dict]]:
         history = downsample_quarterly(date_cols, row)
         if history:
             rec["history"] = history
-        records.append(rec)
+        by_state.setdefault(st, []).append(rec)
 
-    records.sort(key=lambda r: r["zip"])
-    metro_name = sub["Metro"].dropna().iloc[0] if not sub.empty else metro_substr
-    payload = {"metro": str(metro_name), "as_of": latest, "zips": records}
-    print(f"ZHVI: {len(records)} ZIPs kept, {skipped} skipped (as_of {latest})")
-    return payload, records
+    for recs in by_state.values():
+        recs.sort(key=lambda r: r["zip"])
+    total = sum(len(v) for v in by_state.values())
+    print(f"ZHVI national: {total} ZIPs across {len(by_state)} states, {skipped} skipped "
+          f"(as_of {latest})")
+    return latest, by_state
 
 
 # Scalar metrics merged into the choropleth GeoJSON (history is NOT — MapLibre
@@ -181,7 +197,6 @@ def build_geojson(geo_text: str, scalars: dict[str, dict], tolerance: float) -> 
         features_out.append(
             {"type": "Feature", "properties": out_props, "geometry": mapping(geom)}
         )
-    print(f"GeoJSON: {len(features_out)} ZIP polygons kept (tolerance {tolerance})")
     return {"type": "FeatureCollection", "features": features_out}
 
 
@@ -231,13 +246,34 @@ def build_redfin(path: str, zips: set[str], chunksize: int = 200_000) -> dict[st
     return result
 
 
+def build_state(
+    code: str, name: str, as_of: str, records: list[dict], geo_text: str, tolerance: float
+) -> tuple[dict, dict, dict]:
+    """Build (geojson, zhvi_payload, region_entry) for one state."""
+    scalars = {r["zip"]: {m: r.get(m) for m in GEOJSON_METRICS} for r in records}
+    geojson = build_geojson(geo_text, scalars, tolerance)
+    feats = geojson["features"]
+    bbox = center = None
+    if feats:
+        union = unary_union([shape(f["geometry"]) for f in feats])
+        minx, miny, maxx, maxy = union.bounds
+        bbox = [round(v, 4) for v in (minx, miny, maxx, maxy)]
+        c = union.centroid
+        center = [round(c.x, 4), round(c.y, 4)]
+    # Only emit records whose ZIP actually rendered (has geometry), so the popup
+    # lookup matches the choropleth.
+    kept_zips = {f["properties"]["zip"] for f in feats}
+    zips = [r for r in records if r["zip"] in kept_zips]
+    payload = {"state": code, "name": name, "as_of": as_of, "zips": zips}
+    region = {"code": code, "name": name, "bbox": bbox, "center": center, "zip_count": len(feats)}
+    return geojson, payload, region
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--zhvi-url", default=ZHVI_URL)
-    ap.add_argument("--geo-url", default=GEO_URL)
     ap.add_argument("--zhvi-path", help="Local ZHVI CSV (skips download)")
-    ap.add_argument("--geo-path", help="Local WA ZIP GeoJSON (skips download)")
-    ap.add_argument("--metro", default="Seattle", help="Substring match on ZHVI Metro")
+    ap.add_argument("--states", help="Comma-separated state codes (default: all)")
     ap.add_argument("--tolerance", type=float, default=0.0005, help="Simplify tolerance (deg)")
     ap.add_argument("--out-dir", default=str(DATA_DIR))
     ap.add_argument("--redfin-path", help="Local Redfin zip tracker .tsv.gz (for $/sqft)")
@@ -249,14 +285,16 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    print("Loading ZHVI…")
+    print("Loading national ZHVI…")
     zhvi_csv = Path(args.zhvi_path).read_text() if args.zhvi_path else _fetch_text(args.zhvi_url)
-    print("Loading ZIP GeoJSON…")
-    geo_text = Path(args.geo_path).read_text() if args.geo_path else _fetch_text(args.geo_url)
+    as_of, by_state = parse_zhvi_national(zhvi_csv)
 
-    payload, records = build_zhvi(zhvi_csv, args.metro)
+    if args.states:
+        targets = [s.strip().upper() for s in args.states.split(",") if s.strip()]
+    else:
+        targets = sorted(c for c in by_state if c in STATE_SLUGS)
 
-    # Optional Redfin $/sqft — only when a path or URL is provided.
+    # Optional Redfin $/sqft (national) — apply ppsf to records before splitting.
     redfin_source = args.redfin_path
     tmp = None
     if redfin_source is None and args.redfin_url:
@@ -266,23 +304,52 @@ def main() -> int:
         stream_download(args.redfin_url, Path(tmp.name))
         redfin_source = tmp.name
     if redfin_source:
-        ppsf = build_redfin(redfin_source, {r["zip"] for r in records})
-        for r in records:
-            if r["zip"] in ppsf:
-                r["ppsf"] = ppsf[r["zip"]]
+        all_zips = {r["zip"] for recs in by_state.values() for r in recs}
+        ppsf = build_redfin(redfin_source, all_zips)
+        for recs in by_state.values():
+            for r in recs:
+                if r["zip"] in ppsf:
+                    r["ppsf"] = ppsf[r["zip"]]
         if tmp:
             Path(tmp.name).unlink(missing_ok=True)
 
-    scalars = {
-        r["zip"]: {m: r.get(m) for m in GEOJSON_METRICS} for r in records
-    }
-    geojson = build_geojson(geo_text, scalars, args.tolerance)
-
     out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "seattle_zhvi.json").write_text(json.dumps(payload), encoding="utf-8")
-    (out_dir / "seattle_zcta.geojson").write_text(json.dumps(geojson), encoding="utf-8")
-    print(f"Wrote {out_dir / 'seattle_zhvi.json'} and {out_dir / 'seattle_zcta.geojson'}")
+    states_dir = out_dir / "states"
+    states_dir.mkdir(parents=True, exist_ok=True)
+
+    # Merge into any existing regions index so subset builds accumulate.
+    regions_path = out_dir / "regions.json"
+    regions: dict[str, dict] = {}
+    if regions_path.exists():
+        regions = {r["code"]: r for r in json.loads(regions_path.read_text(encoding="utf-8"))}
+
+    built = 0
+    for code in targets:
+        if code not in STATE_SLUGS:
+            print(f"  skip {code}: unknown state code")
+            continue
+        records = by_state.get(code)
+        if not records:
+            print(f"  skip {code}: no ZHVI records")
+            continue
+        try:
+            geo_text = _fetch_text(GEO_BASE + STATE_SLUGS[code] + "_zip_codes_geo.min.json")
+        except httpx.HTTPError as e:
+            print(f"  skip {code}: geometry download failed ({e})")
+            continue
+        geojson, payload, region = build_state(
+            code, state_name(code), as_of, records, geo_text, args.tolerance
+        )
+        (states_dir / f"{code}.geojson").write_text(json.dumps(geojson), encoding="utf-8")
+        (states_dir / f"{code}.zhvi.json").write_text(json.dumps(payload), encoding="utf-8")
+        regions[code] = region
+        built += 1
+        print(f"  {code} {region['name']}: {region['zip_count']} ZIPs")
+
+    regions_path.write_text(
+        json.dumps(sorted(regions.values(), key=lambda r: r["name"])), encoding="utf-8"
+    )
+    print(f"Built {built} state(s); wrote {states_dir} and {regions_path}")
     return 0
 
 

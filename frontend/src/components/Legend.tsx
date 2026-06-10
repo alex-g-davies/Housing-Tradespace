@@ -1,24 +1,24 @@
-import { type MetricDef, NO_DATA_COLOR } from "../config";
+import { type ColorStop, type MetricDef, NO_DATA_COLOR } from "../config";
 
 interface Props {
   metric: MetricDef;
+  stops: ColorStop[];
   budget: number;
 }
 
 /**
- * Color legend for the active metric (R2/002). Stops + formatter come from the
- * metric definition so the legend can never drift from the map fill. The budget
- * de-emphasis applies on every metric, so the "over budget" entry is shown
- * whenever a budget is set (not just on the value metric).
+ * Color legend for the active metric (R2/002). `stops` are the resolved (often
+ * per-region quantile) breaks shared with the map fill, so the two never drift.
+ * The "over budget" entry shows whenever a budget is set.
  */
-export default function Legend({ metric, budget }: Props) {
+export default function Legend({ metric, stops, budget }: Props) {
   const showOverBudget = budget > 0;
   return (
     <div className="legend" aria-label={`${metric.label} legend`}>
       <div className="legend-title">{metric.label}</div>
       <ul className="legend-list">
-        {metric.stops.map((stop, i) => {
-          const next = metric.stops[i + 1];
+        {stops.map((stop, i) => {
+          const next = stops[i + 1];
           const label = next
             ? `${metric.format(stop.value)}–${metric.format(next.value)}`
             : `${metric.format(stop.value)}+`;

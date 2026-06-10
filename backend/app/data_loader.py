@@ -18,8 +18,8 @@ from .config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-ZHVI_FILE = "seattle_zhvi.json"
-ZCTA_FILE = "seattle_zcta.geojson"
+STATES_DIR = DATA_DIR / "states"
+REGIONS_FILE = DATA_DIR / "regions.json"
 
 
 def normalize_zip(raw: Any) -> str | None:
@@ -110,7 +110,7 @@ def parse_housing(raw: dict[str, Any]) -> ParsedHousing:
 
     A row needs a valid ZIP and a positive median_value; the enriched metrics are
     coerced individually and left as None when missing/invalid (never fatal)."""
-    metro = str(raw.get("metro", ""))
+    metro = str(raw.get("metro") or raw.get("name") or "")  # state payloads use `name`
     as_of = str(raw.get("as_of", ""))
     records: dict[str, ZipRecord] = {}
     skipped = 0
@@ -178,20 +178,34 @@ class DataStore:
     geojson: dict[str, Any]
 
     @classmethod
-    def load(cls, data_dir: Path) -> DataStore:
-        with open(data_dir / ZHVI_FILE, encoding="utf-8") as f:
+    def load(cls, state: str, states_dir: Path = STATES_DIR) -> DataStore:
+        """Load one state's committed housing values + choropleth geometry."""
+        with open(states_dir / f"{state}.zhvi.json", encoding="utf-8") as f:
             housing = parse_housing(json.load(f))
-        with open(data_dir / ZCTA_FILE, encoding="utf-8") as f:
+        with open(states_dir / f"{state}.geojson", encoding="utf-8") as f:
             geojson = merge_geojson(json.load(f), housing.records)
         logger.info(
-            "DataStore loaded: %d ZIP records, %d geojson features",
+            "DataStore[%s]: %d ZIP records, %d geojson features",
+            state,
             len(housing.records),
             len(geojson["features"]),
         )
         return cls(housing=housing, geojson=geojson)
 
 
+@lru_cache(maxsize=8)
+def get_data_store(state: str) -> DataStore:
+    """Per-state cached store (bounded — only requested states stay in memory)."""
+    return DataStore.load(state, STATES_DIR)
+
+
 @lru_cache
-def get_data_store() -> DataStore:
-    """Cached store loaded from the committed data dir (overridable in tests)."""
-    return DataStore.load(DATA_DIR)
+def load_regions() -> list[dict[str, Any]]:
+    """The region index (states with name/bbox/center/zip_count) for the picker."""
+    if not REGIONS_FILE.exists():
+        return []
+    return json.loads(REGIONS_FILE.read_text(encoding="utf-8"))
+
+
+def region_codes() -> set[str]:
+    return {r["code"] for r in load_regions()}

@@ -11,6 +11,7 @@ import {
   type MetricDef,
   OVER_BUDGET_OPACITY,
   SCENARIO_STYLES,
+  type ColorStop,
   WORK_MARKER_COLOR,
   type WorkLocation,
 } from "../config";
@@ -23,11 +24,14 @@ interface Props {
   isochrone: FeatureCollection | null;
   records: Map<string, ZipValue>;
   activeMetric: MetricDef;
+  stops: ColorStop[];
   budget: number;
   work: WorkLocation;
   onWorkChange: (lat: number, lon: number) => void;
   /** Increment to fly the map to the current work location (address / reset). */
   recenterSignal: number;
+  /** Region bounds to fit when the selected state changes (national). */
+  fitBbox: [number, number, number, number] | null;
 }
 
 const ZIP_SOURCE = "zips";
@@ -60,10 +64,12 @@ export default function MapView({
   isochrone,
   records,
   activeMetric,
+  stops,
   budget,
   work,
   onWorkChange,
   recenterSignal,
+  fitBbox,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -89,6 +95,8 @@ export default function MapView({
   recordsRef.current = records;
   const metricRef = useRef(activeMetric);
   metricRef.current = activeMetric;
+  const stopsRef = useRef(stops);
+  stopsRef.current = stops;
 
   // Create the map once.
   useEffect(() => {
@@ -173,7 +181,7 @@ export default function MapView({
         paint: {
           "fill-color": fillColorExpression(
             metricRef.current.property,
-            metricRef.current.stops,
+            stopsRef.current,
           ) as never,
           "fill-opacity": fillOpacityExpression(
             budgetRef.current,
@@ -254,16 +262,29 @@ export default function MapView({
     );
   }, [budget]);
 
-  // Switching the active metric re-shades the choropleth (paint change only).
+  // Switching the active metric OR the per-region ramp re-shades the choropleth.
   useEffect(() => {
     const m = map.current;
     if (!m || !loaded.current || !m.getLayer(ZIP_FILL)) return;
     m.setPaintProperty(
       ZIP_FILL,
       "fill-color",
-      fillColorExpression(activeMetric.property, activeMetric.stops) as never,
+      fillColorExpression(activeMetric.property, stops) as never,
     );
-  }, [activeMetric]);
+  }, [activeMetric, stops]);
+
+  // Fit the map to the selected region's bounds (skip the initial mount so the
+  // opening Seattle view is preserved).
+  const firstFit = useRef(true);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !fitBbox) return;
+    if (firstFit.current) {
+      firstFit.current = false;
+      return;
+    }
+    m.fitBounds(fitBbox, { padding: 40, duration: 800 });
+  }, [fitBbox]);
 
   return <div ref={container} style={{ position: "absolute", inset: 0 }} />;
 }

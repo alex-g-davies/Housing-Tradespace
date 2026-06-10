@@ -1,7 +1,38 @@
 // Pure helpers for the choropleth ramp and budget logic. Kept free of React/
 // MapLibre so they are directly unit-testable (R2/R4).
 
-import { COLOR_STOPS, type ColorStop, NO_DATA_COLOR } from "../config";
+import { COLOR_STOPS, type ColorStop, type MetricDef, NO_DATA_COLOR } from "../config";
+
+/**
+ * Quantile color stops for a region's value distribution: one break per color at
+ * the 0,1/n,2/n,… quantiles, so each region spreads across the whole ramp.
+ * Ties are nudged to keep breaks strictly ascending (MapLibre interpolate needs
+ * increasing inputs). Falls back to evenly-indexed breaks if data is degenerate.
+ */
+export function computeQuantileStops(
+  values: (number | null | undefined)[],
+  colors: string[],
+): ColorStop[] {
+  const clean = values
+    .filter((v): v is number => v != null && !Number.isNaN(v))
+    .sort((a, b) => a - b);
+  const n = colors.length;
+  if (clean.length === 0) return colors.map((color, i) => ({ value: i, color }));
+
+  const stops: ColorStop[] = [];
+  for (let i = 0; i < n; i++) {
+    const idx = Math.floor((i / n) * (clean.length - 1));
+    let value = clean[idx];
+    if (i > 0 && value <= stops[i - 1].value) value = stops[i - 1].value + 1;
+    stops.push({ value, color: colors[i] });
+  }
+  return stops;
+}
+
+/** Resolve the ramp stops for a metric: fixed (YoY) or per-region quantiles. */
+export function resolveStops(metric: MetricDef, values: (number | null | undefined)[]): ColorStop[] {
+  return metric.fixedStops ?? computeQuantileStops(values, metric.colors);
+}
 
 /** Color for a median value, or the no-data color when value is missing. */
 export function colorForValue(value: number | null | undefined): string {

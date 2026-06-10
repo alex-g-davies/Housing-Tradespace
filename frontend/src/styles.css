@@ -262,6 +262,23 @@ body,
   color: var(--muted);
 }
 
+/* Region picker */
+.region {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.region__select {
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 9px;
+  font-size: 13px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 /* Commute control */
 .commute {
   margin-bottom: 14px;

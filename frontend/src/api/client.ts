@@ -27,9 +27,21 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const getHousing = () => getJson<HousingResponse>("/housing");
+export const getHousing = (state: string) =>
+  getJson<HousingResponse>(`/housing?state=${state}`);
 
-export const getZipsGeojson = () => getJson<FeatureCollection>("/zips.geojson");
+export const getZipsGeojson = (state: string) =>
+  getJson<FeatureCollection>(`/zips.geojson?state=${state}`);
+
+export interface RegionInfo {
+  code: string;
+  name: string;
+  bbox: [number, number, number, number] | null;
+  center: [number, number] | null;
+  zip_count: number;
+}
+
+export const getRegions = () => getJson<RegionInfo[]>("/regions");
 
 export const getIsochrone = (lat: number, lon: number, minutes: number) =>
   getJson<FeatureCollection>(`/isochrone?lat=${lat}&lon=${lon}&minutes=${minutes}`);

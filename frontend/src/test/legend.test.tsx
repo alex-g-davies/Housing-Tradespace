@@ -6,31 +6,30 @@ import { METRICS } from "../config";
 
 const VALUE = METRICS.find((m) => m.key === "value")!;
 const YOY = METRICS.find((m) => m.key === "yoy")!;
+// Resolved stops the parent would pass (per-region quantiles for value).
+const VALUE_STOPS = VALUE.colors.map((color, i) => ({ value: i * 100_000, color }));
 
 describe("Legend (R2/002)", () => {
-  it("renders a swatch per ramp stop plus a no-data entry for the active metric", () => {
-    const { container } = render(<Legend metric={VALUE} budget={0} />);
+  it("renders a swatch per resolved stop plus a no-data entry", () => {
+    const { container } = render(<Legend metric={VALUE} stops={VALUE_STOPS} budget={0} />);
     const swatches = container.querySelectorAll(".legend-swatch");
-    expect(swatches.length).toBe(VALUE.stops.length + 1);
+    expect(swatches.length).toBe(VALUE_STOPS.length + 1);
     expect(screen.getByText("No data")).toBeInTheDocument();
     expect(screen.getByText("Median value")).toBeInTheDocument();
   });
 
   it("shows the over-budget entry whenever a budget is set, on any metric (R4)", () => {
-    const { rerender } = render(<Legend metric={VALUE} budget={0} />);
+    const { rerender } = render(<Legend metric={VALUE} stops={VALUE_STOPS} budget={0} />);
     expect(screen.queryByText("Over budget")).not.toBeInTheDocument();
-    rerender(<Legend metric={VALUE} budget={800000} />);
+    rerender(<Legend metric={VALUE} stops={VALUE_STOPS} budget={800000} />);
     expect(screen.getByText("Over budget")).toBeInTheDocument();
-    // The budget fade applies on every metric, so the entry stays for YoY too.
-    rerender(<Legend metric={YOY} budget={800000} />);
+    rerender(<Legend metric={YOY} stops={YOY.fixedStops!} budget={800000} />);
     expect(screen.getByText("Over budget")).toBeInTheDocument();
   });
 
-  it("formats boundaries with the metric's formatter (e.g. percent for YoY)", () => {
-    const { container } = render(<Legend metric={YOY} budget={0} />);
+  it("formats boundaries with the metric's formatter (percent for YoY)", () => {
+    const { container } = render(<Legend metric={YOY} stops={YOY.fixedStops!} budget={0} />);
     expect(screen.getByText("YoY change")).toBeInTheDocument();
-    // Legend rows use the metric formatter -> percent labels for YoY.
-    const rows = within(container).getAllByText(/%/);
-    expect(rows.length).toBeGreaterThan(0);
+    expect(within(container).getAllByText(/%/).length).toBeGreaterThan(0);
   });
 });
