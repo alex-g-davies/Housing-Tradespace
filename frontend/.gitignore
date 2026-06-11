@@ -3,3 +3,9 @@ dist/
 *.local
 .vite/
 *.tsbuildinfo
+
+# Brand source masters stay local; only the optimized derivatives
+# (logo.png, social.png, favicon-64.png, ...) are committed.
+public/brand/logo.svg
+public/brand/favicon.png.png
+public/brand/favicon.svg
