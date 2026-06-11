@@ -79,6 +79,14 @@ def _coerce_float(raw: Any) -> float | None:
     return None if v != v else v  # drop NaN
 
 
+def _coerce_name(raw: Any) -> str | None:
+    """A non-empty place-name string, else None (spec 012 R1)."""
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    return s or None
+
+
 def _coerce_history(raw: Any) -> list[tuple[str, int]] | None:
     """Validate a [[label, value], ...] series, dropping malformed points."""
     if not isinstance(raw, list):
@@ -107,6 +115,7 @@ class ZipRecord:
     population: int | None = None
     median_income: int | None = None
     price_to_income: float | None = None
+    name: str | None = None  # GeoNames primary place name (012)
 
 
 @dataclass
@@ -145,6 +154,7 @@ def parse_housing(raw: dict[str, Any]) -> ParsedHousing:
             population=_coerce_value(row.get("population")),
             median_income=_coerce_value(row.get("median_income")),
             price_to_income=_coerce_float(row.get("price_to_income")),
+            name=_coerce_name(row.get("name")),
         )
     if skipped:
         logger.info("parse_housing: skipped %d invalid ZHVI row(s)", skipped)

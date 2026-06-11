@@ -4,7 +4,8 @@
   "zips": [
     { "zip": "98101", "median_value": 720000, "yoy_pct": 4.2, "cagr5_pct": 8.1, "ppsf": 612,
       "history": [["2023-Q4", 700000], ["2024-Q2", 712000], ["2024-Q4", 720000]],
-      "population": 45000, "median_income": 110000, "price_to_income": 6.5 },
+      "population": 45000, "median_income": 110000, "price_to_income": 6.5,
+      "name": "Seattle" },
     { "zip": 98109, "median_value": 890000, "ppsf": 540 },
     { "zip": "98103", "median_value": 950000, "yoy_pct": -1.5, "population": "oops",
       "median_income": -666666666 },

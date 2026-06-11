@@ -23,11 +23,13 @@ Estimates), Redfin Data Center.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import re
 import sys
 import tempfile
+import zipfile
 from io import StringIO
 from pathlib import Path
 
@@ -56,6 +58,10 @@ ACS_URL_TEMPLATE = (
     "?get=B01003_001E,B19013_001E&for=zip%20code%20tabulation%20area:*"
 )
 ACS_FIELDS = {"B01003_001E": "population", "B19013_001E": "median_income"}
+# GeoNames postal data (CC BY 4.0, attribution required): ZIP -> primary place
+# name. Tab-delimited US.txt inside US.zip; cols: country, postal code, place
+# name, state name, state code, county, ... (spec 012 R1).
+GEONAMES_URL = "https://download.geonames.org/export/zip/US.zip"
 _ZIP_RE = re.compile(r"\d{5}")
 
 # Census/OpenDataDE may key the ZIP under any of these property names.
@@ -248,6 +254,45 @@ def _census_api_key() -> str:
             if name.strip() == "CENSUS_API_KEY":
                 return value.strip().strip("'\"")
     return ""
+
+
+def parse_geonames(text: str) -> dict[str, str]:
+    """Parse GeoNames postal rows into {zip: primary place name}.
+
+    First row per ZIP wins (GeoNames lists the primary place first);
+    malformed lines and un-normalizable ZIPs are skipped, never fatal."""
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        cols = line.split("\t")
+        if len(cols) < 3:
+            continue
+        z = normalize_zip(cols[1])
+        name = cols[2].strip()
+        if z is None or not name or z in out:
+            continue
+        out[z] = name
+    return out
+
+
+def apply_names(records: list[dict], names: dict[str, str]) -> None:
+    """Merge place names into ZHVI records in place; unmatched records and
+    existing names from a fresher source are left untouched."""
+    for rec in records:
+        name = names.get(rec["zip"])
+        if name:
+            rec["name"] = name
+
+
+def fetch_geonames() -> dict[str, str]:
+    """Download and parse the GeoNames US postal zip (~7 MB)."""
+    with httpx.Client(timeout=180, follow_redirects=True) as c:
+        r = c.get(GEONAMES_URL)
+        r.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        text = zf.read("US.txt").decode("utf-8")
+    names = parse_geonames(text)
+    print(f"GeoNames: place names for {len(names)} ZIPs")
+    return names
 
 
 def fetch_acs(year: int) -> dict[str, dict[str, int]]:
@@ -447,7 +492,19 @@ def main() -> int:
         help="Only merge Redfin $/sqft into EXISTING data/states/*.zhvi.json "
         "(downloads the national tracker unless --redfin-path is given)",
     )
+    ap.add_argument(
+        "--enrich-names",
+        action="store_true",
+        help="Only merge GeoNames place names into EXISTING data/states/*.zhvi.json",
+    )
+    ap.add_argument("--names-path", help="Local GeoNames US.txt (skips download)")
+    ap.add_argument("--no-names", action="store_true", help="Skip place-name enrichment")
     args = ap.parse_args()
+
+    def load_names() -> dict[str, str]:
+        if args.names_path:
+            return parse_geonames(Path(args.names_path).read_text(encoding="utf-8"))
+        return fetch_geonames()
 
     def load_acs() -> dict[str, dict[str, int]]:
         if args.acs_path:
@@ -471,7 +528,7 @@ def main() -> int:
 
     # In-place enrichment modes (008 R7 pattern): rewrite existing zhvi files
     # only — geometry and regions stay byte-identical.
-    if args.enrich_acs or args.enrich_redfin:
+    if args.enrich_acs or args.enrich_redfin or args.enrich_names:
         states_dir = Path(args.out_dir) / "states"
         paths = sorted(states_dir.glob("*.zhvi.json"))
         if not paths:
@@ -495,6 +552,13 @@ def main() -> int:
             except httpx.HTTPError as e:
                 raise SystemExit(f"--enrich-redfin aborted: {e}") from None
 
+        names: dict[str, str] = {}
+        if args.enrich_names:
+            try:
+                names = load_names()
+            except (httpx.HTTPError, KeyError, zipfile.BadZipFile) as e:
+                raise SystemExit(f"--enrich-names aborted: {e}") from None
+
         for path in paths:
             payload = json.loads(path.read_text(encoding="utf-8"))
             records = payload.get("zips", [])
@@ -504,6 +568,8 @@ def main() -> int:
                 for rec in records:
                     if rec["zip"] in ppsf:
                         rec["ppsf"] = ppsf[rec["zip"]]
+            if args.enrich_names:
+                apply_names(records, names)
             path.write_text(json.dumps(payload), encoding="utf-8")
         print(f"Enriched {len(paths)} state file(s) in {states_dir}")
         return 0
@@ -546,6 +612,16 @@ def main() -> int:
         else:
             for recs in by_state.values():
                 apply_acs(recs, acs)
+
+    # GeoNames place names (012): same pattern; failure degrades gracefully.
+    if not args.no_names:
+        try:
+            geonames = load_names()
+        except (httpx.HTTPError, KeyError, zipfile.BadZipFile) as e:
+            print(f"Name enrichment skipped (fetch/parse failed: {e})")
+        else:
+            for recs in by_state.values():
+                apply_names(recs, geonames)
 
     out_dir = Path(args.out_dir)
     states_dir = out_dir / "states"

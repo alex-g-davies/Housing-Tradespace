@@ -70,6 +70,7 @@ def get_housing(
             population=r.population,
             median_income=r.median_income,
             price_to_income=r.price_to_income,
+            name=r.name,
         )
         for _, r in sorted(store.housing.records.items())
     ]

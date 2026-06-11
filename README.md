@@ -125,6 +125,8 @@ Sources (free / aggregate):
 - **Redfin** `zip_code_market_tracker` — median **sold** $/sqft (All
   Residential). © Redfin Data Center. Large (>4 GB uncompressed); streamed
   and filtered.
+- **GeoNames** postal data — primary place name per ZIP. © GeoNames,
+  licensed CC BY 4.0 (geonames.org). Refresh via `--enrich-names`.
 
 The committed `backend/data/isochrone_fixture.json` is a single drive-time
 polygon served only in **fixture mode** (no `MAPBOX_TOKEN`) as one "typical"
@@ -170,6 +172,7 @@ use** — commercial use of this app would require revisiting these terms:
 - ZIP boundaries: **ZCTA** geometries © U.S. Census Bureau (OpenDataDE mirror).
 - Demographics: **American Community Survey 5-Year Estimates** © U.S. Census Bureau.
 - $/sqft: © **Redfin** Data Center.
+- Place names: © **GeoNames**, CC BY 4.0.
 - Basemap tiles: © **CARTO**, © OpenStreetMap contributors.
 - Isochrones & geocoding: **Mapbox** APIs (server-side, token required).
 

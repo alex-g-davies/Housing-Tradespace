@@ -120,6 +120,29 @@ def test_apply_acs_merges_and_computes_ratio():
     assert "price_to_income" not in records[2]
 
 
+def test_parse_geonames_first_row_wins_and_skips_malformed():
+    text = "\n".join(
+        [
+            "US\t98335\tGig Harbor\tWashington\tWA\tPierce\t053\t\t\t47.32\t-122.59\t4",
+            # Duplicate ZIP -> first row wins:
+            "US\t98335\tArletta\tWashington\tWA\tPierce\t053\t\t\t47.3\t-122.6\t4",
+            "US\t00501\tHoltsville\tNew York\tNY\tSuffolk\t103\t\t\t40.8\t-73.0\t4",  # leading zero
+            "US\tABCDE\tNowhere\tXX\tXX",  # bad zip -> skipped
+            "garbage line",  # malformed -> skipped
+            "US\t98336\t\tWashington\tWA",  # empty name -> skipped
+        ]
+    )
+    out = build_data.parse_geonames(text)
+    assert out == {"98335": "Gig Harbor", "00501": "Holtsville"}
+
+
+def test_apply_names_merges_and_leaves_unmatched_untouched():
+    records = [{"zip": "98335", "median_value": 700000}, {"zip": "98336", "median_value": 500000}]
+    build_data.apply_names(records, {"98335": "Gig Harbor"})
+    assert records[0]["name"] == "Gig Harbor"
+    assert "name" not in records[1]
+
+
 def test_parse_zhvi_national_groups_by_state():
     csv = (
         "RegionName,State,2025-04-30,2026-04-30\n"

@@ -40,6 +40,10 @@ def test_parse_housing_skips_bad_rows_and_coerces_metrics():
     assert parsed.records["98109"].yoy_pct is None
     assert parsed.records["98109"].ppsf == 540
 
+    # Place name (012): present when enriched, None otherwise.
+    assert full.name == "Seattle"
+    assert parsed.records["98109"].name is None
+
     # ACS fields (008): coerced individually; garbage/sentinels -> None.
     assert full.population == 45000
     assert full.median_income == 110000

@@ -15,6 +15,8 @@ class ZipValue(BaseModel):
     population: int | None = None
     median_income: int | None = None
     price_to_income: float | None = None
+    # GeoNames primary place name (spec 012). Optional.
+    name: str | None = None
 
 
 class HousingResponse(BaseModel):
