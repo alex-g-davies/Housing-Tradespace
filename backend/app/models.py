@@ -11,6 +11,10 @@ class ZipValue(BaseModel):
     cagr5_pct: float | None = None
     ppsf: float | None = None
     history: list[tuple[str, int]] | None = None
+    # Census ACS context (spec 008). Optional — omitted when unavailable.
+    population: int | None = None
+    median_income: int | None = None
+    price_to_income: float | None = None
 
 
 class HousingResponse(BaseModel):

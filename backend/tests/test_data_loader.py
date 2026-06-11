@@ -40,6 +40,14 @@ def test_parse_housing_skips_bad_rows_and_coerces_metrics():
     assert parsed.records["98109"].yoy_pct is None
     assert parsed.records["98109"].ppsf == 540
 
+    # ACS fields (008): coerced individually; garbage/sentinels -> None.
+    assert full.population == 45000
+    assert full.median_income == 110000
+    assert full.price_to_income == 6.5
+    assert parsed.records["98103"].population is None  # "oops"
+    assert parsed.records["98103"].median_income is None  # negative sentinel
+    assert parsed.records["98109"].population is None  # absent
+
 
 def test_merge_geojson_merges_scalar_metrics_and_excludes_history():
     raw = json.load(open(FIXTURES / "sample_zhvi.json", encoding="utf-8"))

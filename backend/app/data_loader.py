@@ -95,7 +95,8 @@ def _coerce_history(raw: Any) -> list[tuple[str, int]] | None:
 
 @dataclass
 class ZipRecord:
-    """One ZIP's metrics. median_value is required; the rest are optional (002)."""
+    """One ZIP's metrics. median_value is required; the rest are optional
+    (002 enrichment, 008 ACS context)."""
 
     zip: str
     median_value: int
@@ -103,6 +104,9 @@ class ZipRecord:
     cagr5_pct: float | None = None
     ppsf: float | None = None
     history: list[tuple[str, int]] | None = None
+    population: int | None = None
+    median_income: int | None = None
+    price_to_income: float | None = None
 
 
 @dataclass
@@ -138,6 +142,9 @@ def parse_housing(raw: dict[str, Any]) -> ParsedHousing:
             cagr5_pct=_coerce_float(row.get("cagr5_pct")),
             ppsf=_coerce_float(row.get("ppsf")),
             history=_coerce_history(row.get("history")),
+            population=_coerce_value(row.get("population")),
+            median_income=_coerce_value(row.get("median_income")),
+            price_to_income=_coerce_float(row.get("price_to_income")),
         )
     if skipped:
         logger.info("parse_housing: skipped %d invalid ZHVI row(s)", skipped)

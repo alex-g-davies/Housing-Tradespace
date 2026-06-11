@@ -67,6 +67,9 @@ def get_housing(
             cagr5_pct=r.cagr5_pct,
             ppsf=r.ppsf,
             history=r.history,
+            population=r.population,
+            median_income=r.median_income,
+            price_to_income=r.price_to_income,
         )
         for _, r in sorted(store.housing.records.items())
     ]

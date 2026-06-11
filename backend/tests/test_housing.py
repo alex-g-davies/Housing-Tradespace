@@ -27,6 +27,12 @@ def test_housing_defaults_to_wa(client):
     assert zips["98101"]["ppsf"] == 612
     assert zips["98101"]["history"][0] == ["2023-Q4", 700000]
     assert zips["98112"]["yoy_pct"] is None
+    # ACS fields (008) flow through; absent/invalid -> null, never an error.
+    assert zips["98101"]["population"] == 45000
+    assert zips["98101"]["median_income"] == 110000
+    assert zips["98101"]["price_to_income"] == 6.5
+    assert zips["98109"]["population"] is None
+    assert zips["98103"]["median_income"] is None
 
 
 def test_housing_for_another_state(client):
