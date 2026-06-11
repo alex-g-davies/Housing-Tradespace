@@ -18,8 +18,8 @@ export default function TopMovers({ records, onZipChosen }: Props) {
   if (movers.gainers.length === 0) return null;
 
   return (
-    <div className="movers">
-      <span className="section-label">Top movers (YoY)</span>
+    <details className="movers panel-fold">
+      <summary>Top movers (YoY)</summary>
       <div className="movers__tabs" role="group" aria-label="Top movers direction">
         {(["gainers", "losers"] as const).map((key) => (
           <button
@@ -49,6 +49,6 @@ export default function TopMovers({ records, onZipChosen }: Props) {
           </li>
         ))}
       </ul>
-    </div>
+    </details>
   );
 }

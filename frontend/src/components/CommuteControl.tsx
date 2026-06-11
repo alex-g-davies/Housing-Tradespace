@@ -27,32 +27,35 @@ export default function CommuteControl({ minutes, onMinutesChange, variation }: 
         ))}
       </div>
 
-      {/* Scenario legend — each departure window's outline color. */}
-      <ul className="scenarios">
-        {SCENARIO_STYLES.map((s) => (
-          <li key={s.key} className="scenarios__row">
-            <span className="scenarios__line" style={{ background: s.line }} />
-            {s.label}
-            {variation && (
-              <span className="scenarios__area">
-                {formatSqMi(variation[`${s.key}_sqmi` as const])}
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {variation?.peak_shrink_pct != null ? (
-        <p className="commute__summary">
-          Evening rush shrinks your {minutes}-min reach{" "}
-          <strong>{variation.peak_shrink_pct}%</strong> vs. light traffic.
-        </p>
-      ) : (
-        <p className="commute__summary commute__summary--muted">
-          Traffic variation unavailable (showing a typical contour).
-        </p>
-      )}
-      <p className="commute__note">Drive time leaving your workplace.</p>
+      {/* Scenario detail folds away (010 R4) — the colored outlines on the
+          map carry the message; the breakdown is for the curious. */}
+      <details className="panel-fold">
+        <summary>Traffic scenarios</summary>
+        <ul className="scenarios">
+          {SCENARIO_STYLES.map((s) => (
+            <li key={s.key} className="scenarios__row">
+              <span className="scenarios__line" style={{ background: s.line }} />
+              {s.label}
+              {variation && (
+                <span className="scenarios__area">
+                  {formatSqMi(variation[`${s.key}_sqmi` as const])}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+        {variation?.peak_shrink_pct != null ? (
+          <p className="commute__summary">
+            Evening rush shrinks your {minutes}-min reach{" "}
+            <strong>{variation.peak_shrink_pct}%</strong> vs. light traffic.
+          </p>
+        ) : (
+          <p className="commute__summary commute__summary--muted">
+            Traffic variation unavailable (showing a typical contour).
+          </p>
+        )}
+        <p className="commute__note">Drive time leaving your workplace.</p>
+      </details>
     </div>
   );
 }

@@ -57,16 +57,17 @@ export default function ControlsPanel({
 }: Props) {
   return (
     <div className="panel">
-      <h1 className="panel-title">tradespace</h1>
+      <div className="panel-title">tradespace</div>
       <p className="panel-subtitle">{metroLabel}</p>
 
-      {regions.length > 0 && (
-        <RegionPicker regions={regions} state={state} onStateChange={onStateChange} />
-      )}
+      <div className="panel__section">
+        {regions.length > 0 && (
+          <RegionPicker regions={regions} state={state} onStateChange={onStateChange} />
+        )}
+        <BudgetInput budget={budget} onChange={onBudgetChange} />
+      </div>
 
-      <BudgetInput budget={budget} onChange={onBudgetChange} />
-
-      <div className="work">
+      <div className="panel__section work">
         <span className="work__label">Work location</span>
         <AddressSearch onLocated={onAddressLocated} proximity={searchProximity} />
         <span className="work__place">{workLabel ?? "Custom pin location"}</span>
@@ -76,17 +77,20 @@ export default function ControlsPanel({
         <span className="work__hint">Drag the pin to move it, or search an address</span>
       </div>
 
-      <CommuteControl
-        minutes={minutes}
-        onMinutesChange={onMinutesChange}
-        variation={variation}
-      />
+      <div className="panel__section">
+        <CommuteControl
+          minutes={minutes}
+          onMinutesChange={onMinutesChange}
+          variation={variation}
+        />
+      </div>
 
-      <span className="section-label">Shade map by</span>
-      <MetricSwitcher active={metricKey} onChange={onMetricChange} />
-      <Legend metric={activeMetric} stops={stops} budget={budget} />
-
-      <TopMovers records={records} onZipChosen={onZipChosen} />
+      <div className="panel__section">
+        <span className="section-label">Shade map by</span>
+        <MetricSwitcher active={metricKey} onChange={onMetricChange} />
+        <Legend metric={activeMetric} stops={stops} budget={budget} />
+        <TopMovers records={records} onZipChosen={onZipChosen} />
+      </div>
 
       <p className="panel-foot">
         Hover a ZIP for quick stats, click for details · {minutes}-min drive-time overlay

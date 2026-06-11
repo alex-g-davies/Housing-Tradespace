@@ -59,4 +59,13 @@ describe("TopMovers (009 R6)", () => {
     );
     expect(container).toBeEmptyDOMElement();
   });
+
+  it("is a collapsible fold with a summary toggle (010 R4)", () => {
+    const { container } = render(<TopMovers records={RECORDS} onZipChosen={() => {}} />);
+    const details = container.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(screen.getByText("Top movers (YoY)").tagName).toBe("SUMMARY");
+    fireEvent.click(screen.getByText("Top movers (YoY)"));
+    expect(details!.open).toBe(true);
+  });
 });

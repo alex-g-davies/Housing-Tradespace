@@ -1,9 +1,23 @@
 :root {
   --panel-bg: rgba(255, 255, 255, 0.94);
   --ink: #1a2230;
-  --muted: #5b6675;
+  /* 010 R5: meets 4.5:1 on white even at the smallest panel sizes. */
+  --muted: #4a5462;
   --border: #e2e6ec;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Visually hidden but exposed to assistive tech (010 R5). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 * {
@@ -63,7 +77,48 @@ body,
 .panel-title {
   margin: 0;
   font-size: 20px;
+  font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+/* Visual grouping (010 R4): sections separated by hairlines. */
+.panel__section {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.panel__section:first-of-type {
+  border-top: none;
+  padding-top: 8px;
+}
+
+/* Collapsible secondary content (010 R4). */
+.panel-fold > summary {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.panel-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel-fold > summary::before {
+  content: "▸";
+  font-size: 10px;
+  transition: transform 120ms ease;
+}
+
+.panel-fold[open] > summary::before {
+  transform: rotate(90deg);
 }
 
 .panel-subtitle {
@@ -142,20 +197,26 @@ body,
 .address__input {
   flex: 1;
   min-width: 0;
+  min-height: 40px;
   padding: 7px 9px;
   font-size: 13px;
   color: var(--ink);
   border: 1px solid var(--border);
   border-radius: 8px;
-  outline: none;
 }
 
-.address__input:focus {
+/* Keep the quiet border treatment for mouse focus, but let the global
+   :focus-visible ring through for keyboard users (010 R5). */
+.address__input:focus:not(:focus-visible) {
+  outline: none;
   border-color: #9ecae1;
 }
 
 .address__btn {
-  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 7px 14px;
   font-size: 13px;
   font-weight: 600;
   color: #fff;
@@ -249,14 +310,17 @@ body,
 }
 
 .work__reset {
+  display: inline-flex;
+  align-items: center;
   align-self: flex-start;
+  min-height: 40px;
   margin-top: 2px;
-  padding: 4px 8px;
+  padding: 4px 12px;
   font-size: 12px;
   color: var(--ink);
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
@@ -349,6 +413,7 @@ body,
 .switcher__btn {
   flex: 1 1 0;
   min-width: 0; /* allow buttons to shrink within the panel */
+  min-height: 40px;
   padding: 6px 4px;
   font-size: 12px;
   font-weight: 600;
@@ -402,8 +467,14 @@ body,
 }
 
 .legend-swatch--faded {
-  background: #6baed6;
-  opacity: 0.15;
+  /* Full-opacity stripes read as "de-emphasized" while staying visible
+     against the panel (010 R5) — the map itself still fades over-budget
+     ZIPs via fill-opacity. */
+  background: repeating-linear-gradient(
+    45deg,
+    #9ecae1 0 3px,
+    #ffffff 3px 6px
+  );
 }
 
 /* Top movers (009 R6) */
@@ -422,6 +493,7 @@ body,
 
 .movers__tab {
   flex: 1 1 0;
+  min-height: 40px;
   padding: 4px;
   font-size: 12px;
   font-weight: 600;
@@ -449,6 +521,7 @@ body,
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  min-height: 40px;
   padding: 4px 6px;
   font-size: 13px;
   color: var(--ink);
@@ -514,13 +587,18 @@ body,
 }
 
 .status__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 32px;
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0 4px;
 }
 
 /* First-run hint (005 R6) */
@@ -547,7 +625,10 @@ body,
 
 .hint__dismiss {
   flex: none;
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
   color: #fff;
@@ -607,6 +688,11 @@ body,
 }
 
 .zip-detail__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -796,6 +882,23 @@ body,
   border: none;
   border-radius: 8px;
   cursor: pointer;
+}
+
+/* Coarse pointers get full 44px targets (010 R5). */
+@media (pointer: coarse) {
+  .work__reset,
+  .switcher__btn,
+  .movers__tab,
+  .movers__row,
+  .address__btn,
+  .address__input,
+  .hint__dismiss,
+  .status__dismiss,
+  .zip-detail__close,
+  .zip-detail__pin,
+  .panel-fold > summary {
+    min-height: 44px;
+  }
 }
 
 /* Mobile (005 R3): the floating panel becomes a bottom sheet so the map owns
