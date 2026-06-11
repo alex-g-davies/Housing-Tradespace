@@ -5,13 +5,15 @@ import { getGeocode } from "../api/client";
 interface Props {
   /** Called with the geocoded work location and a human-readable label. */
   onLocated: (lat: number, lon: number, label: string) => void;
+  /** Bias point for the search — the selected region's center (010 R3). */
+  proximity: { lat: number; lon: number } | null;
 }
 
 type Status = "idle" | "loading" | "error" | "ok";
 
 /** Free-text address search that geocodes via the backend and moves the work
  * location to the result. */
-export default function AddressSearch({ onLocated }: Props) {
+export default function AddressSearch({ onLocated, proximity }: Props) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [msg, setMsg] = useState("");
@@ -23,7 +25,7 @@ export default function AddressSearch({ onLocated }: Props) {
     setStatus("loading");
     setMsg("");
     try {
-      const r = await getGeocode(query);
+      const r = await getGeocode(query, proximity ?? undefined);
       onLocated(r.lat, r.lon, r.place_name);
       setStatus("ok");
       setMsg(r.place_name);
@@ -47,7 +49,7 @@ export default function AddressSearch({ onLocated }: Props) {
           id="address-input"
           className="address__input"
           type="text"
-          placeholder="e.g. 400 Broad St, Seattle"
+          placeholder="Search an address or landmark"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />

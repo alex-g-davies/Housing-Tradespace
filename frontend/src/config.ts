@@ -13,20 +13,21 @@ export const API_BASE = "/api";
 export const BASEMAP_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-// Initial view centered on the Seattle metro.
+// Opening view before any region/geolocation resolves (the default region's
+// largest metro keeps the first paint data-dense).
 export const MAP_CENTER: [number, number] = [-122.33, 47.64];
 export const MAP_ZOOM = 10.2;
 
 // Default region when none is chosen (also the URL-serialization default).
 export const DEFAULT_STATE = "WA";
 
-// Default work location the commute isochrone starts from. Users can move it by
-// dragging the pin or clicking the map.
+// Fallback work location (inside the default region's main job center) used
+// until the user drags the pin, searches an address, or geolocation resolves.
 export interface WorkLocation {
   lat: number;
   lon: number;
 }
-export const DEFAULT_WORK: WorkLocation = { lat: 47.518, lon: -122.2966 }; // Museum of Flight, Seattle
+export const DEFAULT_WORK: WorkLocation = { lat: 47.518, lon: -122.2966 };
 
 // Sequential ramp keyed on median home value (USD). Ascending stops; cool->deep
 // reads as "more expensive". Shared by the map fill and the legend swatches.

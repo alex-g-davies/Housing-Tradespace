@@ -23,13 +23,16 @@ describe("api client (R5 — token never client-side)", () => {
     await getZipsGeojson("WA");
     await getIsochrone(47.518, -122.2966, 30);
     await getGeocode("Pike Place Market");
+    await getGeocode("Main St", { lat: 31.2, lon: -99.3 });
     const urls = f.mock.calls.map((c) => String(c[0]));
     expect(urls[0]).toBe("/api/housing?state=WA");
     expect(urls[1]).toBe("/api/zips.geojson?state=WA");
     // Isochrone carries only the work lat/lon/minutes — never a Mapbox token.
     expect(urls[2]).toBe("/api/isochrone?lat=47.518&lon=-122.2966&minutes=30");
-    // Geocoding goes through the backend with the query encoded.
+    // Geocoding goes through the backend with the query encoded; the optional
+    // proximity bias (010 R3) carries only region-center coordinates.
     expect(urls[3]).toBe("/api/geocode?q=Pike%20Place%20Market");
+    expect(urls[4]).toBe("/api/geocode?q=Main%20St&proximity_lat=31.2&proximity_lon=-99.3");
     for (const url of urls) {
       expect(url).not.toContain("mapbox");
       expect(url).not.toContain("access_token");

@@ -242,10 +242,10 @@ body,
   color: var(--muted);
 }
 
-.work__coords {
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
+.work__place {
+  font-size: 13px;
   color: var(--ink);
+  line-height: 1.35;
 }
 
 .work__reset {

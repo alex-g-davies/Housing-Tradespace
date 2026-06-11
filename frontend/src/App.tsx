@@ -31,6 +31,11 @@ export default function App() {
   const [metricKey, setMetricKey] = useState<MetricKey>(INITIAL_URL.metric ?? "value");
   const [minutes, setMinutes] = useState<number>(INITIAL_URL.minutes ?? DEFAULT_MINUTES);
   const [work, setWork] = useState<WorkLocation>(INITIAL_URL.work ?? DEFAULT_WORK);
+  // Human-readable pin description (place name / "{State} center" / "Your
+  // location"); null = manually dragged ("Custom pin location"). Never coords.
+  const [workLabel, setWorkLabel] = useState<string | null>(
+    INITIAL_URL.work ? null : "Washington center",
+  );
   const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [stateCode, setStateCode] = useState<string>(INITIAL_URL.state ?? DEFAULT_STATE);
   // Bumped on programmatic work moves (address / reset) so the map flies there.
@@ -105,8 +110,8 @@ export default function App() {
       // containing the ZIP center is the strongest guarantee.
       const best = [...SCENARIO_STYLES].reverse().find((s) => contained.has(s.key));
       commuteReach = best
-        ? `Within the ${minutes}-min drive (${best.label.toLowerCase()}) — ZIP center`
-        : `Outside the ${minutes}-min drive — ZIP center`;
+        ? `Within a ${minutes}-min drive of work (${best.label.toLowerCase()}) — approximate`
+        : `Beyond a ${minutes}-min drive of work — approximate`;
     }
     return { percentile, vsStateMedianPct, commuteReach };
   }, [selectedZip, records, centroids, isochrone, minutes]);
@@ -158,15 +163,26 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [stateCode, selectedZip, budget, work, minutes, metricKey]);
 
-  const handleWorkDrag = useCallback((lat: number, lon: number) => setWork({ lat, lon }), []);
-  const handleAddressLocated = useCallback((lat: number, lon: number) => {
+  const handleWorkDrag = useCallback((lat: number, lon: number) => {
     setWork({ lat, lon });
+    setWorkLabel(null); // dragged pins have no place name
+  }, []);
+  const handleAddressLocated = useCallback((lat: number, lon: number, label: string) => {
+    setWork({ lat, lon });
+    setWorkLabel(label);
     setRecenter((n) => n + 1);
   }, []);
   const handleResetWork = useCallback(() => {
-    setWork(DEFAULT_WORK);
+    const r = regions.find((x) => x.code === stateCode);
+    if (r?.center) {
+      setWork({ lat: r.center[1], lon: r.center[0] });
+      setWorkLabel(`${r.name} center`);
+    } else {
+      setWork(DEFAULT_WORK);
+      setWorkLabel("Washington center");
+    }
     setRecenter((n) => n + 1);
-  }, []);
+  }, [regions, stateCode]);
 
   const handleStateChange = useCallback(
     (code: string) => {
@@ -174,7 +190,10 @@ export default function App() {
       setSelectedZip(null); // records are per-state; stale selections are meaningless
       setPinnedZip(null);
       const r = regions.find((x) => x.code === code);
-      if (r?.center) setWork({ lat: r.center[1], lon: r.center[0] });
+      if (r?.center) {
+        setWork({ lat: r.center[1], lon: r.center[0] });
+        setWorkLabel(`${r.name} center`);
+      }
     },
     [regions],
   );
@@ -203,7 +222,7 @@ export default function App() {
         <ZipDetailPanel
           zip={selectedZip}
           record={records.get(selectedZip)}
-          metroLabel={region?.name ?? "Washington"}
+          metroLabel={region?.name ?? stateCode}
           budget={budget}
           context={zipContext}
           onClose={() => setSelectedZip(null)}
@@ -226,10 +245,11 @@ export default function App() {
         minutes={minutes}
         onMinutesChange={setMinutes}
         variation={variation}
-        work={work}
+        workLabel={workLabel}
         onResetWork={handleResetWork}
         onAddressLocated={handleAddressLocated}
-        metroLabel={region?.name ?? "Washington"}
+        metroLabel={region?.name ?? stateCode}
+        searchProximity={region?.center ? { lat: region.center[1], lon: region.center[0] } : null}
         records={records}
         onZipChosen={selectZipAndFly}
       />
@@ -237,7 +257,7 @@ export default function App() {
       <Toasts
         messages={[
           ...notices,
-          ...(regionsFailed ? ["Region list unavailable — showing Washington only"] : []),
+          ...(regionsFailed ? [`Region list unavailable — showing ${stateCode} only`] : []),
         ]}
       />
       {loading && <div className="status">Loading map…</div>}

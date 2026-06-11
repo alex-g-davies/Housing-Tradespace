@@ -1,5 +1,5 @@
 import type { CommuteVariation, RegionInfo, ZipValue } from "../api/client";
-import type { ColorStop, MetricDef, MetricKey, WorkLocation } from "../config";
+import type { ColorStop, MetricDef, MetricKey } from "../config";
 import AddressSearch from "./AddressSearch";
 import BudgetInput from "./BudgetInput";
 import CommuteControl from "./CommuteControl";
@@ -21,10 +21,14 @@ interface Props {
   minutes: number;
   onMinutesChange: (minutes: number) => void;
   variation: CommuteVariation | null;
-  work: WorkLocation;
+  /** Human-readable description of the work pin (place name, "{State} center",
+   * "Your location") — never raw coordinates (010 R2). */
+  workLabel: string | null;
   onResetWork: () => void;
   onAddressLocated: (lat: number, lon: number, label: string) => void;
   metroLabel: string;
+  /** Bias point for address search — the selected region's center. */
+  searchProximity: { lat: number; lon: number } | null;
   records: Map<string, ZipValue>;
   onZipChosen: (zip: string) => void;
 }
@@ -43,10 +47,11 @@ export default function ControlsPanel({
   minutes,
   onMinutesChange,
   variation,
-  work,
+  workLabel,
   onResetWork,
   onAddressLocated,
   metroLabel,
+  searchProximity,
   records,
   onZipChosen,
 }: Props) {
@@ -63,12 +68,10 @@ export default function ControlsPanel({
 
       <div className="work">
         <span className="work__label">Work location</span>
-        <AddressSearch onLocated={onAddressLocated} />
-        <span className="work__coords">
-          {work.lat.toFixed(4)}, {work.lon.toFixed(4)}
-        </span>
+        <AddressSearch onLocated={onAddressLocated} proximity={searchProximity} />
+        <span className="work__place">{workLabel ?? "Custom pin location"}</span>
         <button type="button" className="work__reset" onClick={onResetWork}>
-          Reset to Museum of Flight
+          Reset to {metroLabel} center
         </button>
         <span className="work__hint">Drag the pin to move it, or search an address</span>
       </div>
@@ -86,7 +89,7 @@ export default function ControlsPanel({
       <TopMovers records={records} onZipChosen={onZipChosen} />
 
       <p className="panel-foot">
-        Hover or tap a ZIP for its metrics · 30-min drive-time overlay
+        Hover a ZIP for quick stats, click for details · {minutes}-min drive-time overlay
       </p>
     </div>
   );

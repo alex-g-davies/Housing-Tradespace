@@ -34,7 +34,7 @@ const OTHER: ZipValue = {
 const CONTEXT: ZipContext = {
   percentile: 82,
   vsStateMedianPct: 31.4,
-  commuteReach: "Within the 30-min drive (midday) — ZIP center",
+  commuteReach: "Within a 30-min drive of work (midday) — approximate",
 };
 
 const EMPTY_CONTEXT: ZipContext = {
@@ -71,7 +71,7 @@ describe("ZipDetailPanel (009 R2/R9)", () => {
     expect(screen.getByText("$112,000")).toBeInTheDocument();
     expect(screen.getByText("8.4×")).toBeInTheDocument();
     expect(screen.getByText("82%")).toBeInTheDocument();
-    expect(screen.getByText(/Within the 30-min drive/)).toBeInTheDocument();
+    expect(screen.getByText(/Within a 30-min drive/)).toBeInTheDocument();
     expect(screen.getByRole("img")).toBeInTheDocument(); // price chart
   });
 
