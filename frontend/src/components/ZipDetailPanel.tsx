@@ -1,5 +1,8 @@
+import { useState } from "react";
+
 import type { ZipValue } from "../api/client";
 import { formatCount, formatPct, formatRatio, formatUsd, placeLabel } from "../lib/format";
+import type { WikiSummary } from "../lib/wiki";
 import { deltaPct } from "../lib/zipStats";
 import PriceChart from "./PriceChart";
 
@@ -22,6 +25,8 @@ interface Props {
   stateCode: string;
   budget: number;
   context: ZipContext;
+  /** Wikipedia summary of the place (012 R3); null hides the section. */
+  wiki: WikiSummary | null;
   onClose: () => void;
   /** Compare (009 R7): pin the current ZIP, then click another to compare. */
   pinnedZip: string | null;
@@ -136,6 +141,7 @@ export default function ZipDetailPanel({
   stateCode,
   budget,
   context,
+  wiki,
   onClose,
   pinnedZip,
   pinnedRecord,
@@ -144,6 +150,7 @@ export default function ZipDetailPanel({
 }: Props) {
   const comparing = pinnedZip != null && pinnedZip !== zip;
   const yoy = record?.yoy_pct ?? null;
+  const [wikiExpanded, setWikiExpanded] = useState(false);
 
   return (
     <aside className="zip-detail" aria-label={`Details for ZIP ${zip}`}>
@@ -229,6 +236,35 @@ export default function ZipDetailPanel({
             )}
             {context.commuteReach && <p>{context.commuteReach}</p>}
           </div>
+
+          {wiki && (
+            <section className="zip-wiki" aria-label="About this area">
+              {wiki.thumbnailUrl && (
+                <img className="zip-wiki__thumb" src={wiki.thumbnailUrl} alt="" />
+              )}
+              <p className={`zip-wiki__extract${wikiExpanded ? " zip-wiki__extract--open" : ""}`}>
+                {wiki.extract}
+              </p>
+              <div className="zip-wiki__foot">
+                <button
+                  type="button"
+                  className="zip-wiki__more"
+                  onClick={() => setWikiExpanded((v) => !v)}
+                >
+                  {wikiExpanded ? "Less" : "More"}
+                </button>
+                {/* CC BY-SA attribution is required (012 R4). */}
+                <a
+                  className="zip-wiki__attrib"
+                  href={wiki.pageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  From Wikipedia (CC BY-SA)
+                </a>
+              </div>
+            </section>
+          )}
 
           {pinnedZip === zip ? (
             <button type="button" className="zip-detail__pin" onClick={onUnpin}>

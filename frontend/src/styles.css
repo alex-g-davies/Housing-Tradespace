@@ -785,6 +785,63 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
+/* Wikipedia area summary (012 R3/R4) */
+.zip-wiki {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.zip-wiki__thumb {
+  float: right;
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 0 0 6px 8px;
+}
+
+.zip-wiki__extract {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.zip-wiki__extract--open {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+.zip-wiki__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  clear: both;
+}
+
+.zip-wiki__more {
+  border: none;
+  background: transparent;
+  color: #3182bd;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 0;
+  min-height: 32px;
+}
+
+.zip-wiki__attrib {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .zip-detail__pin {
   display: block;
   width: 100%;
@@ -846,6 +903,99 @@ body,
 
 .chart-empty {
   margin: 10px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* About & data popover (012 R5) */
+.about-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.about-trigger:hover {
+  color: var(--ink);
+}
+
+.about {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 30, 50, 0.35);
+  padding: 16px;
+}
+
+.about__card {
+  width: min(480px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 18px 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(20, 30, 50, 0.3);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.about__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.about__title {
+  margin: 0;
+  font-size: 17px;
+}
+
+.about__subhead {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.about__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.about__blurb {
+  margin: 8px 0 0;
+}
+
+.about__sources {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.about__sources li {
+  margin-bottom: 3px;
+}
+
+.about__foot {
+  margin: 12px 0 0;
   font-size: 12px;
   color: var(--muted);
 }

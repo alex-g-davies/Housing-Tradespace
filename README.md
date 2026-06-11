@@ -173,6 +173,7 @@ use** — commercial use of this app would require revisiting these terms:
 - Demographics: **American Community Survey 5-Year Estimates** © U.S. Census Bureau.
 - $/sqft: © **Redfin** Data Center.
 - Place names: © **GeoNames**, CC BY 4.0.
+- Area summaries: **Wikipedia**, CC BY-SA 4.0 (fetched client-side, attributed in-app).
 - Basemap tiles: © **CARTO**, © OpenStreetMap contributors.
 - Isochrones & geocoding: **Mapbox** APIs (server-side, token required).
 

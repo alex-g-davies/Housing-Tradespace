@@ -1,5 +1,6 @@
 import type { CommuteVariation, RegionInfo, ZipValue } from "../api/client";
 import type { ColorStop, MetricDef, MetricKey } from "../config";
+import AboutPanel from "./AboutPanel";
 import AddressSearch from "./AddressSearch";
 import BudgetInput from "./BudgetInput";
 import CommuteControl from "./CommuteControl";
@@ -82,6 +83,7 @@ export default function ControlsPanel({
       <p className="panel-foot">
         Hover a ZIP for quick stats, click for details · {minutes}-min drive-time overlay
       </p>
+      <AboutPanel />
     </div>
   );
 }

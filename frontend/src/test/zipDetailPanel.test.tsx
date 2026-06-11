@@ -57,6 +57,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ZipDetailPanel>[0]> = 
     stateCode: "WA",
     budget: 0,
     context: CONTEXT,
+    wiki: null as Parameters<typeof ZipDetailPanel>[0]["wiki"],
     onClose: vi.fn(),
     pinnedZip: null as string | null,
     pinnedRecord: undefined as ZipValue | undefined,
@@ -108,6 +109,24 @@ describe("ZipDetailPanel (009 R2/R9)", () => {
     const props = renderPanel({ context: EMPTY_CONTEXT });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(props.onClose).toHaveBeenCalled();
+  });
+
+  it("renders the wiki section with mandatory attribution when present (012)", () => {
+    renderPanel({
+      wiki: {
+        extract: "Fremont is a neighborhood in Seattle.",
+        thumbnailUrl: "https://example.org/t.jpg",
+        pageUrl: "https://en.wikipedia.org/wiki/Fremont,_Seattle",
+      },
+    });
+    expect(screen.getByText(/neighborhood in Seattle/)).toBeInTheDocument();
+    const attrib = screen.getByRole("link", { name: /From Wikipedia \(CC BY-SA\)/ });
+    expect(attrib).toHaveAttribute("href", "https://en.wikipedia.org/wiki/Fremont,_Seattle");
+  });
+
+  it("omits the wiki section entirely when null", () => {
+    renderPanel({ wiki: null });
+    expect(screen.queryByText(/From Wikipedia/)).toBeNull();
   });
 });
 

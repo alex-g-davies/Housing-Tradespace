@@ -18,6 +18,7 @@ import {
 import { useCommute } from "./hooks/useCommute";
 import { useGeolocate } from "./hooks/useGeolocate";
 import { useMapData } from "./hooks/useMapData";
+import { useWikiSummary } from "./hooks/useWikiSummary";
 import { metricValuesFromFeatures, resolveStops } from "./lib/colorScale";
 import { departLabel } from "./lib/format";
 import { centroidsByZip, scenariosContaining } from "./lib/geo";
@@ -104,6 +105,12 @@ export default function App() {
   const commute = useCommute(
     selectedZip ? (centroids.get(selectedZip) ?? null) : null,
     work,
+  );
+
+  // Wikipedia summary of the selected place (012 R3) — best-effort.
+  const wiki = useWikiSummary(
+    selectedZip ? (records.get(selectedZip)?.name ?? null) : null,
+    region?.name ?? null,
   );
 
   // Context block for the detail panel — pure computations over loaded data.
@@ -263,6 +270,7 @@ export default function App() {
           stateCode={stateCode}
           budget={budget}
           context={zipContext}
+          wiki={wiki}
           onClose={() => setSelectedZip(null)}
           pinnedZip={pinnedZip}
           pinnedRecord={pinnedZip ? records.get(pinnedZip) : undefined}
