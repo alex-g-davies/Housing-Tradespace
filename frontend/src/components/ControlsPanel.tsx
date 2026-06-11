@@ -57,7 +57,7 @@ export default function ControlsPanel({
 }: Props) {
   return (
     <div className="panel">
-      <div className="panel-title">tradespace</div>
+      <img src="/brand/logo.png" alt="tradespace" className="panel-logo" />
       <p className="panel-subtitle">{metroLabel}</p>
 
       <div className="panel__section">

@@ -26,7 +26,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="crash">
         <div className="crash__card" role="alert">
-          <h1 className="crash__title">tradespace</h1>
+          <img src="/brand/logo.png" alt="tradespace" className="crash__logo" />
           <p className="crash__msg">Something went wrong rendering the map.</p>
           <button
             type="button"

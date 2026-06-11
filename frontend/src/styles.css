@@ -74,11 +74,16 @@ body,
   color: var(--muted);
 }
 
-.panel-title {
-  margin: 0;
+.panel-logo {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: 100%;
+  /* If the image 404s, the alt text renders in the brand voice. */
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: var(--ink);
 }
 
 /* Visual grouping (010 R4): sections separated by hairlines. */
@@ -860,10 +865,13 @@ body,
   box-shadow: 0 6px 24px rgba(20, 30, 50, 0.12);
 }
 
-.crash__title {
-  margin: 0 0 6px;
+.crash__logo {
+  display: block;
+  height: 30px;
+  width: auto;
+  margin: 0 auto 12px;
   font-size: 20px;
-  letter-spacing: -0.02em;
+  font-weight: 700;
   color: var(--ink);
 }
 
