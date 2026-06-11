@@ -38,10 +38,17 @@ interface Props {
   recenterSignal: number;
   /** Region bounds to fit when the selected state changes (national). */
   fitBbox: [number, number, number, number] | null;
+  /** Whether the FIRST fitBbox should fly (URL deep link to a state). Without
+   * it the opening metro view is preserved, as before. */
+  fitInitialBounds: boolean;
   /** ZIP selection (009 R1): clicking a ZIP selects it; outlines track these. */
   selectedZip: string | null;
   pinnedZip: string | null;
   onSelectZip: (zip: string) => void;
+  /** Fly target for top movers / URL deep links (009 R5/R6): bump the signal
+   * to fly to the point — same counter pattern as recenterSignal. */
+  focusPoint: [number, number] | null;
+  focusSignal: number;
 }
 
 const ZIP_SOURCE = "zips";
@@ -87,9 +94,12 @@ export default function MapView({
   onWorkChange,
   recenterSignal,
   fitBbox,
+  fitInitialBounds,
   selectedZip,
   pinnedZip,
   onSelectZip,
+  focusPoint,
+  focusSignal,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -362,18 +372,27 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMetric]);
 
-  // Fit the map to the selected region's bounds (skip the initial mount so the
-  // opening Seattle view is preserved).
+  // Fit the map to the selected region's bounds. The first fit is skipped to
+  // preserve the opening metro view — unless a URL deep link asked for it.
   const firstFit = useRef(true);
   useEffect(() => {
     const m = map.current;
     if (!m || !fitBbox) return;
     if (firstFit.current) {
       firstFit.current = false;
-      return;
+      if (!fitInitialBounds) return;
     }
     m.fitBounds(fitBbox, { padding: 40, duration: 800 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitBbox]);
+
+  // Fly to a focus point (top mover click / URL deep-linked ZIP).
+  useEffect(() => {
+    const m = map.current;
+    if (!m || focusSignal === 0 || !focusPoint) return;
+    m.flyTo({ center: focusPoint, zoom: Math.max(m.getZoom(), 10.5), duration: 800 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusSignal]);
 
   return <div ref={container} style={{ position: "absolute", inset: 0 }} />;
 }

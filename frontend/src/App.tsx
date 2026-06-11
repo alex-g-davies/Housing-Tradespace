@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type CommuteVariation, type RegionInfo, getRegions } from "./api/client";
 import ControlsPanel from "./components/ControlsPanel";
@@ -19,19 +19,29 @@ import {
 import { useMapData } from "./hooks/useMapData";
 import { resolveStops } from "./lib/colorScale";
 import { centroidsByZip, scenariosContaining } from "./lib/geo";
+import { parseAppUrl, serializeAppUrl } from "./lib/urlState";
 import { deltaPct, percentileRank, stateMedian } from "./lib/zipStats";
 
+// Parsed once at startup (009 R5): seeds the initial state so a deep-linked
+// region is the FIRST fetch, not a correction after a default load.
+const INITIAL_URL = parseAppUrl(window.location.search);
+
 export default function App() {
-  const [budget, setBudget] = useState(0);
-  const [metricKey, setMetricKey] = useState<MetricKey>("value");
-  const [minutes, setMinutes] = useState<number>(DEFAULT_MINUTES);
-  const [work, setWork] = useState<WorkLocation>(DEFAULT_WORK);
+  const [budget, setBudget] = useState(INITIAL_URL.budget ?? 0);
+  const [metricKey, setMetricKey] = useState<MetricKey>(INITIAL_URL.metric ?? "value");
+  const [minutes, setMinutes] = useState<number>(INITIAL_URL.minutes ?? DEFAULT_MINUTES);
+  const [work, setWork] = useState<WorkLocation>(INITIAL_URL.work ?? DEFAULT_WORK);
   const [regions, setRegions] = useState<RegionInfo[]>([]);
-  const [stateCode, setStateCode] = useState<string>(DEFAULT_STATE);
+  const [stateCode, setStateCode] = useState<string>(INITIAL_URL.state ?? DEFAULT_STATE);
   // Bumped on programmatic work moves (address / reset) so the map flies there.
   const [recenter, setRecenter] = useState(0);
   // Click-to-select (009 R1): drives the outline + detail panel.
   const [selectedZip, setSelectedZip] = useState<string | null>(null);
+  // Fly target for top movers / deep links (counter pattern, 009 R5/R6).
+  const [focusPoint, setFocusPoint] = useState<[number, number] | null>(null);
+  const [focusSignal, setFocusSignal] = useState(0);
+  // Deep-linked ZIP: applied once when its state's data has arrived.
+  const pendingZipRef = useRef<string | null>(INITIAL_URL.zip ?? null);
 
   const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
   const { geojson, isochrone, records, loading, error, notices } = useMapData(
@@ -107,6 +117,45 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedZip]);
 
+  // Select + fly to a ZIP (top movers, deep links).
+  const selectZipAndFly = useCallback(
+    (zip: string) => {
+      setSelectedZip(zip);
+      const centroid = centroids.get(zip);
+      if (centroid) {
+        setFocusPoint(centroid);
+        setFocusSignal((n) => n + 1);
+      }
+    },
+    [centroids],
+  );
+
+  // Apply the deep-linked ZIP once its state's records + geometry are in
+  // (009 R5). Unknown ZIPs are dropped silently.
+  useEffect(() => {
+    const zip = pendingZipRef.current;
+    if (!zip || records.size === 0 || centroids.size === 0) return;
+    pendingZipRef.current = null;
+    if (records.has(zip)) selectZipAndFly(zip);
+  }, [records, centroids, selectZipAndFly]);
+
+  // Write app state back to the URL, debounced — pin drags fire frequently and
+  // replaceState (not pushState) keeps the back button pointing out of the app.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const qs = serializeAppUrl({
+        state: stateCode,
+        zip: selectedZip,
+        budget,
+        work,
+        minutes,
+        metric: metricKey,
+      });
+      window.history.replaceState(null, "", `${window.location.pathname}${qs}`);
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [stateCode, selectedZip, budget, work, minutes, metricKey]);
+
   const handleWorkDrag = useCallback((lat: number, lon: number) => setWork({ lat, lon }), []);
   const handleAddressLocated = useCallback((lat: number, lon: number) => {
     setWork({ lat, lon });
@@ -140,9 +189,12 @@ export default function App() {
         onWorkChange={handleWorkDrag}
         recenterSignal={recenter}
         fitBbox={region?.bbox ?? null}
+        fitInitialBounds={INITIAL_URL.state != null && INITIAL_URL.zip == null}
         selectedZip={selectedZip}
         pinnedZip={null}
         onSelectZip={setSelectedZip}
+        focusPoint={focusPoint}
+        focusSignal={focusSignal}
       />
       {selectedZip && (
         <ZipDetailPanel
