@@ -171,3 +171,40 @@ def test_all_scenarios_fail_returns_503_without_token(make_client, httpx_mock):
 def test_invalid_minutes_rejected(make_client, bad):
     client = make_client(mapbox_token=TOKEN)
     assert client.get("/api/isochrone", params={"minutes": bad}).status_code == 422
+
+
+# --- travel modes (spec 013 R2) -------------------------------------------------
+
+
+def test_walk_mode_single_untimed_contour(make_client, httpx_mock):
+    httpx_mock.add_response(json=_SQUARE)
+    client = make_client(mapbox_token=TOKEN)
+    r = client.get("/api/isochrone", params={"minutes": 30, "mode": "walk"})
+    assert r.status_code == 200
+    fc = r.json()
+    assert len(fc["features"]) == 1
+    assert fc["features"][0]["properties"]["scenario"] == "typical"
+    assert fc["features"][0]["properties"]["label"] == "Walking"
+    assert fc["properties"]["variation"] is None
+
+    reqs = httpx_mock.get_requests()
+    assert len(reqs) == 1  # one call, not three scenarios
+    url = str(reqs[0].url)
+    assert "/walking/" in url
+    assert "depart_at" not in url
+
+
+def test_mode_caches_are_separate(make_client, httpx_mock):
+    httpx_mock.add_response(json=_SQUARE, is_reusable=True)
+    client = make_client(mapbox_token=TOKEN)
+    assert client.get("/api/isochrone", params={"minutes": 30}).status_code == 200  # 3 calls
+    assert (
+        client.get("/api/isochrone", params={"minutes": 30, "mode": "cycle"}).status_code == 200
+    )  # +1
+    assert client.get("/api/isochrone", params={"minutes": 30}).status_code == 200  # cached
+    assert len(httpx_mock.get_requests()) == 4
+
+
+def test_invalid_mode_rejected(make_client):
+    client = make_client(mapbox_token=TOKEN)
+    assert client.get("/api/isochrone", params={"mode": "transit"}).status_code == 422

@@ -99,7 +99,7 @@ def test_budget_exhausted_serves_stale_cache(make_client):
     # exhaust the budget: the stale payload must be served rather than 503.
     lat, lon = iso_module.snap_origin(47.6062, -122.3321)
     stale = {"type": "FeatureCollection", "properties": {"stale": True}, "features": []}
-    iso_module._CACHE[(lon, lat, 30)] = (time.time() - 1, stale)
+    iso_module._CACHE[(lon, lat, 30, "drive")] = (time.time() - 1, stale)
 
     client = make_client(mapbox_token=TOKEN, mapbox_daily_call_budget=1)
     r = client.get("/api/isochrone", params={"minutes": 30})

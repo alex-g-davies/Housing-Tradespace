@@ -50,8 +50,13 @@ _MAPBOX_STYLE_PROPS = {
     "metric",
 }
 
-# In-process TTL cache: (lon, lat, minutes) -> (expires_at, variation payload).
-_CACHE: dict[tuple[float, float, int], tuple[float, dict[str, Any]]] = {}
+# App mode -> Mapbox isochrone profile (013 R2). Walk/cycle are
+# time-invariant: one contour, no traffic scenarios.
+MODE_PROFILES = {"drive": "driving-traffic", "walk": "walking", "cycle": "cycling"}
+MODE_LABELS = {"walk": "Walking", "cycle": "Cycling"}
+
+# In-process TTL cache: (lon, lat, minutes, mode) -> (expires_at, payload).
+_CACHE: dict[tuple[float, float, int, str], tuple[float, dict[str, Any]]] = {}
 CACHE_TTL_SECONDS = 24 * 60 * 60
 
 # Origins are snapped to this grid (~500 m) before the cache key and any Mapbox
@@ -197,6 +202,40 @@ def _fetch_contour(
     return resp.json()
 
 
+def fetch_mode_contour(
+    token: str, lat: float, lon: float, minutes: int, mode: str, daily_budget: int = 0
+) -> dict[str, Any]:
+    """Single un-timed contour for walk/cycle (013 R2): durations are
+    time-invariant, so there are no traffic scenarios and only one call."""
+    lat, lon = snap_origin(lat, lon)
+    key = (lon, lat, minutes, mode)
+    hit = _CACHE.get(key)
+    clock = time.time()
+    if hit and hit[0] > clock:
+        return hit[1]
+
+    if not usage.reserve(1, daily_budget):
+        raise usage.UsageBudgetError("daily upstream budget exhausted")
+
+    logger.info("Fetching %s reach contour: %s min", mode, minutes)
+    raw = _fetch_contour(token, lat, lon, minutes, MODE_PROFILES[mode], None)
+    features = strip_mapbox_props(raw, minutes)
+    if not features:
+        raise httpx.HTTPError("empty isochrone response")
+    label = MODE_LABELS.get(mode, mode)
+    for feat in features[:1]:
+        feat["properties"].update(
+            {
+                "scenario": "typical",
+                "label": label,
+                "area_sqmi": geodesic_area_sqmi(feat.get("geometry")),
+            }
+        )
+    payload = build_collection(features[:1], lat=lat, lon=lon, minutes=minutes, variation=None)
+    _CACHE[key] = (clock + CACHE_TTL_SECONDS, payload)
+    return payload
+
+
 def fetch_variation(
     token: str,
     lat: float,
@@ -211,7 +250,7 @@ def fetch_variation(
     fail are skipped; raises only if ALL fail. Raises UsageBudgetError before
     any upstream call when the daily budget is exhausted (cache hits are free)."""
     lat, lon = snap_origin(lat, lon)
-    key = (lon, lat, minutes)
+    key = (lon, lat, minutes, "drive")
     hit = _CACHE.get(key)
     clock = time.time()
     if hit and hit[0] > clock:
@@ -258,8 +297,10 @@ def fetch_variation(
     return payload
 
 
-def cached_variation(lat: float, lon: float, minutes: int) -> dict[str, Any] | None:
+def cached_variation(
+    lat: float, lon: float, minutes: int, mode: str = "drive"
+) -> dict[str, Any] | None:
     """Return a cached (possibly stale) payload if one exists, else None."""
     lat, lon = snap_origin(lat, lon)
-    hit = _CACHE.get((lon, lat, minutes))
+    hit = _CACHE.get((lon, lat, minutes, mode))
     return hit[1] if hit else None

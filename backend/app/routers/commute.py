@@ -7,7 +7,7 @@ import math
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from ..commute import fetch_commute
+from ..commute import MODE_PROFILES, fetch_commute
 from ..config import Settings, get_settings
 from ..data_loader import within_coverage
 from ..models import CommuteEstimate
@@ -39,12 +39,15 @@ def get_commute(
     from_lon: float = Query(..., ge=-180, le=180, description="Home longitude"),
     to_lat: float = Query(..., ge=-90, le=90, description="Work latitude"),
     to_lon: float = Query(..., ge=-180, le=180, description="Work longitude"),
+    mode: str = Query("drive", description="Travel mode: drive / walk / cycle"),
     settings: Settings = Depends(get_settings),
 ) -> CommuteEstimate:
     if not settings.mapbox_token.strip():
         raise HTTPException(
             status_code=503, detail="commute estimate unavailable (no token configured)"
         )
+    if mode not in MODE_PROFILES:
+        raise HTTPException(status_code=422, detail=f"mode must be one of {tuple(MODE_PROFILES)}")
     if not (within_coverage(from_lat, from_lon) and within_coverage(to_lat, to_lon)):
         raise HTTPException(status_code=422, detail="location outside the covered regions")
     if _haversine_miles(from_lat, from_lon, to_lat, to_lon) > MAX_COMMUTE_MILES:
@@ -57,6 +60,7 @@ def get_commute(
             from_lon,
             to_lat,
             to_lon,
+            mode=mode,
             daily_budget=settings.mapbox_daily_call_budget,
         )
     except UsageBudgetError:

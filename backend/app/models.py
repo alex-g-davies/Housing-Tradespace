@@ -33,13 +33,21 @@ class GeocodeResult(BaseModel):
 
 
 class CommuteEstimate(BaseModel):
-    """Routed drive times for a (home, work) pair (spec 011 R2). Departure
-    labels are origin-local naive timestamps, e.g. '2026-06-15T08:00'."""
+    """Routed commute estimates for a (home, work) pair (spec 013 R1/R2).
 
-    am_minutes: int
-    am_depart_local: str
-    pm_minutes: int
-    pm_depart_local: str
+    Drive mode: min–max minutes across rush-window departure samples per
+    direction, with the window's origin-local naive timestamps. Walk/cycle:
+    min == max and null windows (durations are time-invariant)."""
+
+    mode: str
+    am_min_minutes: int
+    am_max_minutes: int
+    am_window_start_local: str | None = None
+    am_window_end_local: str | None = None
+    pm_min_minutes: int
+    pm_max_minutes: int
+    pm_window_start_local: str | None = None
+    pm_window_end_local: str | None = None
 
 
 class RegionInfo(BaseModel):
