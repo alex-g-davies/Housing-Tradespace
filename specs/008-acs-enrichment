@@ -1,0 +1,92 @@
+# Spec 008 — Census ACS Enrichment (Population, Income, Affordability)
+
+Status: Draft
+Owner: <you>
+Related: 002-data-enrichment (the pattern this follows), 009-zip-explorer (the
+consumer of these fields)
+
+## Overview
+
+Add three fields to every ZIP record: **population**, **median household
+income** (both from the Census ACS 5-year survey at ZCTA level), and a derived
+**price-to-income ratio** (median home value ÷ median household income — the
+classic affordability multiple). These power the ZIP detail sidebar (spec 009)
+with real socioeconomic context. Like the spec-002 metrics, all three are
+optional everywhere: a ZIP (or a whole dataset built without ACS) simply
+renders them as "no data."
+
+## Context
+
+- ACS 5-year is the only ACS release with ZCTA-level coverage; since the 2020
+  vintage, ZCTAs are a national-level geography in the Census API (no state
+  nesting), so ONE national call fetches everything (~33k rows):
+  `https://api.census.gov/data/{year}/acs/acs5?get=B01003_001E,B19013_001E&for=zip%20code%20tabulation%20area:*`
+  Tables: B01003_001E = total population, B19013_001E = median household income.
+- The API works keyless at low volume; a free `CENSUS_API_KEY` lifts limits.
+  The key is read only by the human-run build script — never by the app.
+- The Census API encodes missing values as large negative sentinels
+  (e.g. -666666666); these must be dropped, not stored.
+- The existing Redfin merge in `scripts/build_data.py` (national fetch once,
+  merge into records by ZIP before the per-state split) is the pattern to
+  follow.
+
+## Requirements
+
+- **R1 — Enriched record fields.** Each ZIP record in `{ST}.zhvi.json` may
+  carry `population` (int), `median_income` (int, dollars), and
+  `price_to_income` (float, 1 dp). All optional; omitted when unavailable.
+- **R2 — National ACS fetch.** `build_data.py` fetches the two ACS tables in
+  one national call (`--acs-year`, default 2023; `--acs-path` for a local
+  file; `--no-acs` to skip). A pure `parse_acs(rows)` helper validates rows:
+  ZIPs normalized via the existing `normalize_zip`, sentinel/non-positive
+  values dropped per field (never fatal).
+- **R3 — Derived affordability.** `price_to_income(median_value,
+  median_income)` is a pure build-time helper: ratio rounded to 1 dp, None
+  when income is missing/non-positive. Computed once at build so every
+  consumer sees the same number.
+- **R4 — API plumb-through.** `/api/housing` returns the three fields per
+  ZIP. The choropleth GeoJSON is unchanged (`GEOJSON_METRICS` untouched) —
+  these are detail fields, not map-shading metrics.
+- **R5 — Backward compatibility.** Data files built before this spec load
+  and serve exactly as today; absent fields surface as null/omitted, never
+  errors. `parse_housing` coerces each field individually.
+- **R6 — Key handling.** `CENSUS_API_KEY` is optional, read from the
+  environment only inside `scripts/build_data.py`, and never logged, stored,
+  or needed at app runtime.
+- **R7 — In-place enrichment.** A `--enrich-acs` mode rewrites the existing
+  committed `{ST}.zhvi.json` files with ACS fields + ratio WITHOUT
+  re-downloading ZHVI or geometry (geojson and regions.json byte-identical).
+
+## Non-functional / Constraints
+
+- Free/aggregate data only; attribution: U.S. Census Bureau, American
+  Community Survey 5-Year Estimates (add to README data section).
+- No new runtime dependencies; httpx (already used) for the fetch.
+- ETag correctness is automatic: `DataStore.load` hashes source bytes, so
+  enriched files mint new ETags; `/api/zips.geojson` ETags must NOT change.
+
+## Acceptance Criteria
+
+- [ ] `python scripts/build_data.py --enrich-acs` rewrites all 51 zhvi files
+      with the new fields; geojson + regions.json files are byte-identical.
+- [ ] `/api/housing?state=WA` shows plausible population/median_income for a
+      known ZIP (spot-check vs censusreporter.org) and a price_to_income that
+      equals value/income to 1 dp.
+- [ ] A ZIP missing income data carries no `price_to_income`; a dataset built
+      with `--no-acs` serves exactly like today.
+- [ ] `pytest` passes with new tests: parse_acs (happy, sentinel, bad-zip),
+      price_to_income rounding/None, enrich-merge leaves unmatched records
+      untouched, parse_housing coercion of the new fields.
+- [ ] No Census key appears in the repo, app code, or any response.
+
+## Out of Scope (explicit)
+
+- Price-to-income as a fourth map metric / color ramp (possible later spec).
+- Other ACS tables (age, tenure, commute mode — later).
+- Automated data refresh cadence.
+
+## Verification notes
+
+R1/R3/R5 → unit tests; R2/R7 → run the script and diff file sets; R4 → curl
+the endpoint; R6 → grep. The human verifies acceptance criteria; the
+implementing agent does not self-certify done.

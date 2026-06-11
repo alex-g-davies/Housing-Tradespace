@@ -1,0 +1,108 @@
+# Spec 009 — ZIP Explorer: Detail Sidebar, Compare, Top Movers, Shareable URLs
+
+Status: Draft
+Owner: <you>
+Related: 002-data-enrichment (record fields), 008-acs-enrichment (population /
+income / affordability fields this displays), 005-frontend-resilience (mobile
+sheet + toast patterns)
+
+## Overview
+
+Clicking a ZIP currently shows the same small tooltip as hovering. This spec
+makes a click a first-class action: it selects the ZIP (highlighted on the
+map) and opens a pop-out detail panel that is genuinely information-rich — a
+real price-history chart, the spec-008 socioeconomic fields, computed context
+(state percentile, vs-state-median, budget fit, commute reach), plus three
+engagement features: pin-and-compare two ZIPs, a clickable top-movers list,
+and shareable URLs that deep-link any view. The goal feel: ripe with
+information, highly engaging, still legible.
+
+## Context
+
+- All per-state ZIP records are already in client memory
+  (`useMapData` → `records`), so the sidebar needs no new endpoints.
+- `MapView.tsx` already binds `click` on the choropleth layer (it currently
+  just mirrors the hover popup) — selection hooks in there. The map uses no
+  feature-state; selection highlighting uses filter-based line layers.
+- The hover tooltip stays as-is (quick scan); the sidebar is the deep-dive.
+- Commute-reach is judged by the ZIP's centroid against the isochrone band
+  polygons, client-side, with no new dependencies (small ray-casting util);
+  it is labeled as approximate ("ZIP center").
+
+## Requirements
+
+- **R1 — Click-to-select + highlight.** Clicking a ZIP selects it: a solid
+  accent outline appears on that ZIP and the detail panel opens. Esc or the
+  panel's close button deselects. Switching state clears any selection.
+- **R2 — Detail panel.** A pop-out panel (right side on desktop) showing:
+  ZIP + state, median value (prominent) with a budget-fit badge when a budget
+  is set (under/over by $X), YoY / 5-yr CAGR / $-per-sqft, population /
+  median income / price-to-income (008), the price chart (R4), state context
+  (percentile of median value within the state, delta vs state median), and
+  commute-reach (R3). Any missing field renders as "—" (works fully on data
+  built without ACS).
+- **R3 — Commute-reach context.** The panel states which (if any) drive-time
+  band contains the ZIP's center — e.g. "Within the 30-min reach (midday)" /
+  "Outside the 30-min reach" — computed client-side from the loaded
+  isochrone; gracefully absent when no isochrone is loaded.
+- **R4 — Price chart.** The ZIP's quarterly history (≤20 points) renders as
+  a proper SVG line chart with min/max value gridlines and first/last quarter
+  labels — readable, not a sparkline. No charting library.
+- **R5 — Shareable URLs.** `state`, selected `zip`, `budget`, work `lat`/
+  `lon`, `min`(utes), and `metric` round-trip through the query string:
+  parsed once on load (a deep link to another state loads that state first,
+  then selects and flies to the ZIP), written back via debounced
+  `history.replaceState` (no history spam; back button leaves the app).
+  Invalid params are dropped silently. Defaults are omitted from the URL.
+- **R6 — Top movers.** The controls panel lists the state's top 5 YoY
+  gainers (toggle to losers); each row is clickable and flies to + selects
+  that ZIP. States with sparse YoY data show fewer rows without error.
+- **R7 — Pin + compare.** The panel can pin the current ZIP; clicking a
+  different ZIP then shows the two side by side with signed deltas (value,
+  YoY, $/sqft, income, price-to-income). Unpin returns to single view; state
+  switch clears both pin and selection. The pinned ZIP keeps a distinct
+  (dashed) outline on the map.
+- **R8 — Mobile.** On ≤768px viewports the detail panel becomes a full-width
+  bottom sheet (≤60vh) overlaying the controls sheet while open, with a
+  prominent close; compare stacks vertically. Toasts/hints stay visible.
+- **R9 — Graceful degradation.** Every feature works (with "—" or absence)
+  when ACS fields, history, YoY, or the isochrone are missing.
+
+## Non-functional / Constraints
+
+- No new runtime dependencies (no turf, no chart lib).
+- Token safety (001-R5): no new network calls at all.
+- Pure logic (URL codec, stats, geometry) lives in `lib/` with unit tests,
+  per the repo convention; MapView remains untested (existing exemption).
+- The map stays the product: the panel must not cover the selected ZIP's
+  surroundings on desktop (right side, fixed width ~320px).
+
+## Acceptance Criteria
+
+- [ ] Click a ZIP → outline + panel with chart, ACS fields, percentile,
+      budget badge, commute line; Esc closes; state switch clears.
+- [ ] Open `/?state=CO&zip=80302&budget=600000&metric=yoy` in a fresh tab →
+      Colorado loads, map flies to and selects 80302, budget and metric
+      applied; changing controls updates the URL without growing history.
+- [ ] Pin one ZIP, click another → side-by-side with correctly signed
+      deltas; dashed outline on the pinned ZIP; unpin restores single view.
+- [ ] Top movers lists ≤5 gainers/losers; clicking one flies to + selects it.
+- [ ] At 390px width the panel is a bottom sheet over the controls sheet;
+      close returns to controls; compare stacks vertically.
+- [ ] A ZIP with no ACS data / no history / no isochrone shows "—" or omits
+      those blocks without breaking anything.
+- [ ] `npm run test` passes with new tests (urlState, zipStats, geo,
+      PriceChart, ZipDetailPanel, TopMovers); `npm run build` clean.
+
+## Out of Scope (explicit)
+
+- Price-to-income map shading; Redfin market-activity fields.
+- Sharing the pinned ZIP in URLs (only the selected ZIP is encoded).
+- MapView refactor or tests; analytics; comparing >2 ZIPs.
+
+## Verification notes
+
+R1/R2/R4/R6/R7 → component tests + manual walk; R3 → manual with a known
+in-reach/out-of-reach pair; R5 → fresh-tab deep link + URL watching; R8 →
+DevTools 390px + a real phone on the live URL. The human walks the criteria;
+the implementing agent does not self-certify done.
