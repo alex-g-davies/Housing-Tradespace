@@ -28,7 +28,7 @@ renders the two layers on a keyless basemap.
 cd backend
 # Create a venv with the Python 3.13 interpreter, then install deps:
 & "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 
 # Run the API (http://localhost:8000):
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
@@ -104,6 +104,52 @@ served only in **fixture mode** (no `MAPBOX_TOKEN`) as one "typical" band. With 
 token, `/api/isochrone` instead returns three live traffic-aware bands (off-peak /
 midday / rush hour) for the selected time, so the fixture is just an offline
 fallback — keep it a single Polygon feature.
+
+## Deployment (spec [`006`](specs/006-deployment))
+
+The app ships as **one container, one origin**: a multi-stage
+[`backend/Dockerfile`](backend/Dockerfile) builds the SPA and serves it from
+the FastAPI app (`STATIC_DIR`), so production needs no CORS and the relative
+`/api` calls work unchanged. [`render.yaml`](render.yaml) deploys it to
+Render (Starter plan) with health checks and autodeploy from `main`;
+[CI](.github/workflows/ci.yml) gates every push with lint, tests, and a
+Docker smoke run in fixture mode.
+
+```powershell
+# Local production-image smoke test (from the repo root):
+docker build -f backend/Dockerfile -t tradespace .
+docker run --rm -p 8000:8000 -e MAPBOX_TOKEN=$env:MAPBOX_TOKEN tradespace
+# -> http://localhost:8000 serves the SPA; /api/* the API.
+```
+
+First-time Render setup (manual, once):
+
+1. Push the repo to GitHub and create a **Blueprint** on Render pointing at it
+   (`render.yaml` is picked up automatically).
+2. Set `MAPBOX_TOKEN` in the Render dashboard (it is `sync: false` in the
+   blueprint — it never lives in the repo).
+3. Protect the `main` branch on GitHub (require the CI checks) so Render's
+   autodeploy only ever sees green commits.
+
+**Mapbox spend guardrails:** set a spending limit *and* a usage alert in the
+Mapbox dashboard. The production token needs no URL restriction (server-side
+calls send no Referer). The backend additionally enforces per-IP rate limits
+and a daily upstream-call budget (`MAPBOX_DAILY_CALL_BUDGET`, spec 004). If
+the token ever leaks, rotate it in Mapbox and update the Render env var.
+
+## License & data attribution
+
+Code is licensed under **AGPL-3.0** (see [LICENSE](LICENSE)): you may use and
+modify it, but a service run on a modified version must publish its source.
+
+Data and tiles are third-party, free/aggregate, **research-and-attribution
+use** — commercial use of this app would require revisiting these terms:
+
+- Housing values: **Zillow Home Value Index (ZHVI)** © Zillow Research.
+- ZIP boundaries: **ZCTA** geometries © U.S. Census Bureau (OpenDataDE mirror).
+- $/sqft (optional): © **Redfin** Data Center.
+- Basemap tiles: © **CARTO**, © OpenStreetMap contributors.
+- Isochrones & geocoding: **Mapbox** APIs (server-side, token required).
 
 ## Verifying the MVP (spec acceptance criteria)
 

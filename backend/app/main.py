@@ -5,11 +5,13 @@ Run from backend/:  uvicorn app.main:app --reload
 
 import logging
 import time
+from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -80,3 +82,10 @@ def health() -> JSONResponse:
     if not regions:
         return JSONResponse(status_code=503, content={"status": "unavailable"})
     return JSONResponse(content={"status": "ok", "version": app.version, "states": len(regions)})
+
+
+# Single-origin production serving (006 R2): the container sets STATIC_DIR to
+# the built SPA; mounted last so /api/* keeps routing to the API. Local dev
+# leaves it unset and runs the Vite dev server instead.
+if settings.static_dir and Path(settings.static_dir).is_dir():
+    app.mount("/", StaticFiles(directory=settings.static_dir, html=True), name="spa")

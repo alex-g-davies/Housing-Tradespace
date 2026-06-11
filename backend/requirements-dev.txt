@@ -1,0 +1,9 @@
+# Dev / test / preprocessing — superset of the runtime set (006 R3).
+-r requirements.txt
+
+pytest>=8.0
+pytest-httpx>=0.30
+ruff>=0.4
+
+# Data preprocessing (scripts/build_data.py only; not needed to run the app)
+pandas>=2.2

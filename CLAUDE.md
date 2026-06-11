@@ -36,7 +36,7 @@ specs/        One spec per feature (the source of truth for what to build)
 ## Commands
 
 Backend (run from `backend/`):
-- Install: `pip install -r requirements.txt`
+- Install: `pip install -r requirements-dev.txt` (runtime-only: `requirements.txt`)
 - Dev server: `uvicorn app.main:app --reload`
 - Test: `pytest`
 - Lint/format: `ruff check .` and `ruff format .`

@@ -1,0 +1,23 @@
+# Keep the build context lean and secret-free (006 R1).
+.git
+.github
+.claude
+docs
+specs
+
+# Python
+backend/.venv
+backend/.ruff_cache
+backend/.pytest_cache
+backend/tests
+backend/scripts/raw
+**/__pycache__
+
+# Node
+frontend/node_modules
+frontend/dist
+
+# Secrets / local config — the token reaches the container only as an env var.
+**/.env
+**/.env.*
+!**/.env.example

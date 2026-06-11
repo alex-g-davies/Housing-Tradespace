@@ -1,0 +1,18 @@
+# Render blueprint (spec 006 R4): one Docker web service, single origin.
+# MAPBOX_TOKEN is set in the Render dashboard (sync: false) — never here.
+services:
+  - type: web
+    name: tradespace
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: MAPBOX_TOKEN
+        sync: false
+      - key: MAPBOX_DAILY_CALL_BUDGET
+        value: "2000"
+      - key: LOG_FORMAT
+        value: json

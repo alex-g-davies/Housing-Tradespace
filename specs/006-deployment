@@ -1,0 +1,98 @@
+# Spec 006 — Public Deployment (Render, single origin)
+
+Status: Draft
+Owner: <you>
+Related: 004-backend-hardening (prerequisite), docs/DEPLOYMENT.md (cloud
+write-up; AWS/Azure paths stay open as a later migration)
+
+## Overview
+
+Ship the app to a public HTTPS URL with a reproducible, CI-gated pipeline.
+Decisions locked: **Render** (Starter plan, always-on), **single origin** (the
+FastAPI container serves the built SPA, so the existing relative `/api` calls
+work unchanged and production needs no CORS), data bundled in the image,
+**AGPL-3.0** license with data attribution, no custom domain at launch (the
+free `*.onrender.com` URL).
+
+## Context
+
+- The frontend already calls `/api` relative to its own origin and holds no
+  tokens; serving `frontend/dist` from the backend makes one deployable unit.
+- `docs/DEPLOYMENT.md` defines the production acceptance criteria this spec
+  implements (one HTTPS domain, token in a secret store, live features work,
+  reproducible deploy with CI/CD on push).
+- Render builds straight from the GitHub repo via `render.yaml` (blueprint),
+  so the deploy config is reviewable IaC-lite checked into the repo.
+
+## Requirements
+
+- **R1 — Container image.** A multi-stage `backend/Dockerfile` (repo-root
+  build context): stage 1 builds the SPA with Node 20; stage 2 is
+  `python:3.12-slim` with runtime deps only, the app, the committed state
+  data, and the built SPA. The image runs as a non-root user and starts
+  uvicorn on `$PORT`. A root `.dockerignore` keeps node_modules, .venv,
+  tests, caches, `.env`, and `.git` out of the build context.
+- **R2 — Single-origin static serving.** When `STATIC_DIR` points at a
+  directory, the backend mounts it at `/` (after the API routers) with
+  `index.html` at the root. Local dev without `STATIC_DIR` is unchanged
+  (Vite dev server + proxy).
+- **R3 — Runtime/dev dependency split.** `requirements.txt` holds runtime
+  deps only; `requirements-dev.txt` adds test/lint/preprocessing extras
+  (pytest, ruff, pandas). The image installs only the runtime set.
+- **R4 — Render blueprint.** `render.yaml` defines one Docker web service:
+  Starter plan, health check on `/api/health`, autodeploy from `main`,
+  `MAPBOX_TOKEN` as a dashboard secret (`sync: false` — never in the yaml),
+  `MAPBOX_DAILY_CALL_BUDGET` and `LOG_FORMAT=json` set explicitly.
+- **R5 — CI gate.** A GitHub Actions workflow runs on push/PR: backend job
+  (ruff check + format check, pytest), frontend job (npm ci, build incl.
+  tsc, vitest), docker job (build the image, run it in fixture mode, curl
+  `/api/health` and `/` for the SPA). `main` is branch-protected so Render
+  only autodeploys CI-green commits (manual step, documented).
+- **R6 — License + attribution.** AGPL-3.0 `LICENSE` at the repo root; README
+  gains a license section and a data-attribution section (Zillow ZHVI ©
+  Zillow Research; ZCTA boundaries © U.S. Census Bureau via OpenDataDE;
+  Redfin Data Center; CARTO basemap tiles) noting the data sources are
+  free/aggregate research-use feeds — commercial use would require
+  revisiting data licensing.
+- **R7 — Mapbox spend guardrails (manual, documented).** README documents:
+  set a spending limit + usage alert in the Mapbox dashboard; the production
+  token needs no URL restriction (server-side calls send no Referer); rotate
+  the token if it ever leaks.
+
+## Non-functional / Constraints
+
+- Token safety (001-R5) end to end: `MAPBOX_TOKEN` exists only as a Render
+  dashboard secret and an env var inside the container.
+- The image must build with no network access to Mapbox (fixture mode) so CI
+  can smoke-test it without secrets.
+- Keep the AWS/Azure migration path from docs/DEPLOYMENT.md viable: nothing
+  Render-specific leaks into application code (only render.yaml).
+
+## Acceptance Criteria
+
+- [ ] `docker build -f backend/Dockerfile .` succeeds locally; running the
+      image with no token serves the SPA at `/`, live data at
+      `/api/zips.geojson?state=WA`, and the fixture isochrone.
+- [ ] CI is green on a pushed branch: backend, frontend, and docker jobs all
+      pass without any secrets configured.
+- [ ] A Render blueprint deploy from `main` yields a public HTTPS URL where
+      region switch, hover popups, and the live isochrone all work
+      (docs/DEPLOYMENT.md criteria).
+- [ ] The Mapbox token appears nowhere in the repo, image layers, or client
+      bundle; it is set only in the Render dashboard.
+- [ ] LICENSE present; README shows license + data attribution + Mapbox
+      guardrail steps.
+
+## Out of Scope (explicit)
+
+- Custom domain / DNS.
+- AWS/Azure infrastructure (documented in docs/DEPLOYMENT.md as migration).
+- CDN beyond what Render provides; Redis; multi-instance scaling.
+- Automated data refresh (spec 007 handles coverage; refresh cadence later).
+
+## Verification notes
+
+R1/R2 → local docker run smoke; R3 → image size + pip list in image; R4/R5 →
+push branch, watch CI + Render deploy; R6/R7 → README review. The human
+verifies the live URL against docs/DEPLOYMENT.md's checklist; the implementing
+agent does not self-certify done.

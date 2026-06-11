@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # log ingestion). Read once at startup.
     log_format: str = "text"
 
+    # When set to a directory, the built SPA is served from it at "/" (single
+    # origin, spec 006 R2). Empty in local dev — Vite serves the frontend.
+    static_dir: str = ""
+
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",
