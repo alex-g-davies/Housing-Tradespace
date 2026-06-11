@@ -17,6 +17,9 @@ export const BASEMAP_STYLE_URL =
 export const MAP_CENTER: [number, number] = [-122.33, 47.64];
 export const MAP_ZOOM = 10.2;
 
+// Default region when none is chosen (also the URL-serialization default).
+export const DEFAULT_STATE = "WA";
+
 // Default work location the commute isochrone starts from. Users can move it by
 // dragging the pin or clicking the map.
 export interface WorkLocation {

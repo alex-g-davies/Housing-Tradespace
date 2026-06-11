@@ -8,6 +8,7 @@ import Toasts from "./components/Toasts";
 import {
   type ColorStop,
   DEFAULT_MINUTES,
+  DEFAULT_STATE,
   DEFAULT_WORK,
   METRICS,
   type MetricKey,
@@ -15,8 +16,6 @@ import {
 } from "./config";
 import { useMapData } from "./hooks/useMapData";
 import { resolveStops } from "./lib/colorScale";
-
-const DEFAULT_STATE = "WA";
 
 export default function App() {
   const [budget, setBudget] = useState(0);

@@ -28,3 +28,13 @@ export function formatPpsf(value: number): string {
 export function formatSqMi(value: number | null | undefined): string {
   return value == null ? "—" : `${Math.round(value)} mi²`;
 }
+
+/** Thousands-separated count, e.g. 45000 -> "45,000"; null -> "—". */
+export function formatCount(value: number | null | undefined): string {
+  return value == null ? "—" : value.toLocaleString("en-US");
+}
+
+/** Affordability multiple, e.g. 6.5 -> "6.5×"; null -> "—". */
+export function formatRatio(value: number | null | undefined): string {
+  return value == null ? "—" : `${value.toFixed(1)}×`;
+}

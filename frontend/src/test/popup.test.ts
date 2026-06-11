@@ -13,6 +13,9 @@ const full: ZipValue = {
     ["2021-Q3", 890000],
     ["2026-Q2", 937500],
   ],
+  population: 45000,
+  median_income: 110000,
+  price_to_income: 8.5,
 };
 
 describe("buildZipPopupHtml", () => {
@@ -42,6 +45,9 @@ describe("buildZipPopupHtml", () => {
       cagr5_pct: null,
       ppsf: null,
       history: null,
+      population: null,
+      median_income: null,
+      price_to_income: null,
     };
     const html = buildZipPopupHtml("98109", partial);
     expect(html).toContain("$890,000");

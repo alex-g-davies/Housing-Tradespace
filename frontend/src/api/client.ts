@@ -12,6 +12,10 @@ export interface ZipValue {
   cagr5_pct: number | null;
   ppsf: number | null;
   history: [string, number][] | null;
+  // Census ACS context (spec 008); null when unavailable.
+  population: number | null;
+  median_income: number | null;
+  price_to_income: number | null;
 }
 
 export interface HousingResponse {
