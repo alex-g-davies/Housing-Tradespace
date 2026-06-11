@@ -235,16 +235,42 @@ def apply_acs(records: list[dict], acs: dict[str, dict[str, int]]) -> None:
             rec["price_to_income"] = ratio
 
 
-def fetch_acs(year: int) -> dict[str, dict[str, int]]:
-    """One national ACS call (optionally keyed via CENSUS_API_KEY env)."""
-    url = ACS_URL_TEMPLATE.format(year=year)
+def _census_api_key() -> str:
+    """CENSUS_API_KEY from the environment, falling back to backend/.env
+    (gitignored — same place the Mapbox token lives)."""
     key = os.environ.get("CENSUS_API_KEY", "").strip()
+    if key:
+        return key
+    env_file = BACKEND_DIR / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            name, _, value = line.partition("=")
+            if name.strip() == "CENSUS_API_KEY":
+                return value.strip().strip("'\"")
+    return ""
+
+
+def fetch_acs(year: int) -> dict[str, dict[str, int]]:
+    """One national ACS call. The Census API requires a (free) key:
+    sign up at https://api.census.gov/data/key_signup.html and set
+    CENSUS_API_KEY in the environment or backend/.env."""
+    url = ACS_URL_TEMPLATE.format(year=year)
+    key = _census_api_key()
     if key:
         url += f"&key={key}"
     with httpx.Client(timeout=180, follow_redirects=True) as c:
         r = c.get(url)
         r.raise_for_status()
-        acs = parse_acs(r.json())
+        try:
+            acs = parse_acs(r.json())
+        except json.JSONDecodeError:
+            # The API answers 200 with an HTML page when the key is missing/bad.
+            hint = "missing/invalid CENSUS_API_KEY" if "key" in r.text.lower() else "bad response"
+            raise ValueError(
+                f"ACS request failed ({hint}). Get a free key at "
+                "https://api.census.gov/data/key_signup.html and set CENSUS_API_KEY "
+                "in the environment or backend/.env."
+            ) from None
     print(f"ACS {year}: population/income for {len(acs)} ZCTAs")
     return acs
 
@@ -424,7 +450,10 @@ def main() -> int:
 
     # In-place enrichment mode (008 R7): rewrite existing zhvi files only.
     if args.enrich_acs:
-        acs = load_acs()
+        try:
+            acs = load_acs()
+        except (httpx.HTTPError, ValueError) as e:
+            raise SystemExit(f"--enrich-acs aborted: {e}") from None
         states_dir = Path(args.out_dir) / "states"
         enriched = 0
         for path in sorted(states_dir.glob("*.zhvi.json")):
