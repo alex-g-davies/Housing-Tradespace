@@ -94,6 +94,21 @@ function pointInRing([x, y]: LonLat, ring: Position[]): boolean {
   return inside;
 }
 
+/** Scenario keys (e.g. "offpeak", "typical", "peak") of isochrone bands that
+ * contain the point — the commute-reach check (009 R3). */
+export function scenariosContaining(
+  point: LonLat,
+  isochrone: FeatureCollection | null,
+): string[] {
+  if (!isochrone) return [];
+  const out: string[] = [];
+  for (const feature of isochrone.features) {
+    const scenario = (feature.properties as { scenario?: string } | null)?.scenario;
+    if (scenario && pointInPolygonFeature(point, feature)) out.push(scenario);
+  }
+  return out;
+}
+
 /** Point-in-feature for Polygon/MultiPolygon, honoring holes. */
 export function pointInPolygonFeature(point: LonLat, feature: AreaFeature): boolean {
   const geom = feature.geometry;

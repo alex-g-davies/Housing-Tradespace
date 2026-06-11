@@ -5,6 +5,7 @@ import ControlsPanel from "./components/ControlsPanel";
 import MapView from "./components/MapView";
 import Onboarding from "./components/Onboarding";
 import Toasts from "./components/Toasts";
+import ZipDetailPanel, { type ZipContext } from "./components/ZipDetailPanel";
 import {
   type ColorStop,
   DEFAULT_MINUTES,
@@ -12,10 +13,13 @@ import {
   DEFAULT_WORK,
   METRICS,
   type MetricKey,
+  SCENARIO_STYLES,
   type WorkLocation,
 } from "./config";
 import { useMapData } from "./hooks/useMapData";
 import { resolveStops } from "./lib/colorScale";
+import { centroidsByZip, scenariosContaining } from "./lib/geo";
+import { deltaPct, percentileRank, stateMedian } from "./lib/zipStats";
 
 export default function App() {
   const [budget, setBudget] = useState(0);
@@ -26,6 +30,8 @@ export default function App() {
   const [stateCode, setStateCode] = useState<string>(DEFAULT_STATE);
   // Bumped on programmatic work moves (address / reset) so the map flies there.
   const [recenter, setRecenter] = useState(0);
+  // Click-to-select (009 R1): drives the outline + detail panel.
+  const [selectedZip, setSelectedZip] = useState<string | null>(null);
 
   const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
   const { geojson, isochrone, records, loading, error, notices } = useMapData(
@@ -65,6 +71,42 @@ export default function App() {
     (isochrone as { properties?: { variation?: CommuteVariation } } | null)?.properties
       ?.variation ?? null;
 
+  // One centroid per ZIP (009): commute-reach check now, fly-to targets later.
+  const centroids = useMemo(() => centroidsByZip(geojson), [geojson]);
+
+  // Context block for the detail panel — pure computations over loaded data.
+  const zipContext = useMemo<ZipContext>(() => {
+    const empty: ZipContext = { percentile: null, vsStateMedianPct: null, commuteReach: null };
+    if (!selectedZip) return empty;
+    const record = records.get(selectedZip);
+    const values = [...records.values()].map((r) => r.median_value);
+    const percentile = record ? percentileRank(values, record.median_value) : null;
+    const vsStateMedianPct = record
+      ? deltaPct(record.median_value, stateMedian(values))
+      : null;
+
+    let commuteReach: string | null = null;
+    const centroid = centroids.get(selectedZip);
+    if (centroid && isochrone) {
+      const contained = new Set(scenariosContaining(centroid, isochrone));
+      // SCENARIO_STYLES is ordered outer (widest) -> inner; the innermost band
+      // containing the ZIP center is the strongest guarantee.
+      const best = [...SCENARIO_STYLES].reverse().find((s) => contained.has(s.key));
+      commuteReach = best
+        ? `Within the ${minutes}-min drive (${best.label.toLowerCase()}) — ZIP center`
+        : `Outside the ${minutes}-min drive — ZIP center`;
+    }
+    return { percentile, vsStateMedianPct, commuteReach };
+  }, [selectedZip, records, centroids, isochrone, minutes]);
+
+  // Esc closes the detail panel (009 R1).
+  useEffect(() => {
+    if (!selectedZip) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSelectedZip(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedZip]);
+
   const handleWorkDrag = useCallback((lat: number, lon: number) => setWork({ lat, lon }), []);
   const handleAddressLocated = useCallback((lat: number, lon: number) => {
     setWork({ lat, lon });
@@ -78,6 +120,7 @@ export default function App() {
   const handleStateChange = useCallback(
     (code: string) => {
       setStateCode(code);
+      setSelectedZip(null); // records are per-state; a stale selection is meaningless
       const r = regions.find((x) => x.code === code);
       if (r?.center) setWork({ lat: r.center[1], lon: r.center[0] });
     },
@@ -97,7 +140,20 @@ export default function App() {
         onWorkChange={handleWorkDrag}
         recenterSignal={recenter}
         fitBbox={region?.bbox ?? null}
+        selectedZip={selectedZip}
+        pinnedZip={null}
+        onSelectZip={setSelectedZip}
       />
+      {selectedZip && (
+        <ZipDetailPanel
+          zip={selectedZip}
+          record={records.get(selectedZip)}
+          metroLabel={region?.name ?? "Washington"}
+          budget={budget}
+          context={zipContext}
+          onClose={() => setSelectedZip(null)}
+        />
+      )}
       <ControlsPanel
         regions={regions}
         state={stateCode}

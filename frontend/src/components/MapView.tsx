@@ -38,12 +38,23 @@ interface Props {
   recenterSignal: number;
   /** Region bounds to fit when the selected state changes (national). */
   fitBbox: [number, number, number, number] | null;
+  /** ZIP selection (009 R1): clicking a ZIP selects it; outlines track these. */
+  selectedZip: string | null;
+  pinnedZip: string | null;
+  onSelectZip: (zip: string) => void;
 }
 
 const ZIP_SOURCE = "zips";
 const ISO_SOURCE = "isochrone";
 const ZIP_FILL = "zip-fill";
 const ISO_LINE = "iso-line";
+const ZIP_SELECTED = "zip-selected";
+const ZIP_PINNED = "zip-pinned";
+
+/** Filter matching exactly one ZIP (or nothing, for null). */
+function zipFilter(zip: string | null): maplibregl.FilterSpecification {
+  return ["==", ["get", "zip"], zip ?? ""] as unknown as maplibregl.FilterSpecification;
+}
 
 /** Id of the basemap's first label (symbol) layer. Custom layers are inserted
  * before it so basemap labels (city/road names) render on top of the choropleth. */
@@ -76,6 +87,9 @@ export default function MapView({
   onWorkChange,
   recenterSignal,
   fitBbox,
+  selectedZip,
+  pinnedZip,
+  onSelectZip,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -103,6 +117,12 @@ export default function MapView({
   metricRef.current = activeMetric;
   const onViewportStopsRef = useRef(onViewportStops);
   onViewportStopsRef.current = onViewportStops;
+  const onSelectZipRef = useRef(onSelectZip);
+  onSelectZipRef.current = onSelectZip;
+  const selectedZipRef = useRef(selectedZip);
+  selectedZipRef.current = selectedZip;
+  const pinnedZipRef = useRef(pinnedZip);
+  pinnedZipRef.current = pinnedZip;
   const recomputeTimer = useRef<number | null>(null);
 
   // Recompute the choropleth ramp from the ZIPs currently in view (or all source
@@ -167,7 +187,14 @@ export default function MapView({
         .addTo(m);
     };
     m.on("mousemove", ZIP_FILL, showInfo);
-    m.on("click", ZIP_FILL, showInfo);
+    // Click = select (009 R1): opens the detail panel; the hover tooltip is
+    // dismissed so it doesn't sit on top of the outline.
+    m.on("click", ZIP_FILL, (e) => {
+      const zip = ((e.features?.[0]?.properties ?? {}) as { zip?: string }).zip;
+      if (!zip) return;
+      info.remove();
+      onSelectZipRef.current(zip);
+    });
     m.on("mouseleave", ZIP_FILL, () => {
       m.getCanvas().style.cursor = "";
       info.remove();
@@ -243,6 +270,23 @@ export default function MapView({
       },
       anchor,
     );
+    // Selection outlines (009 R1/R7): filter-based so they survive setData and
+    // need no feature-state bookkeeping. Above the basemap labels' anchor so
+    // the highlight is never buried.
+    m.addLayer({
+      id: ZIP_SELECTED,
+      type: "line",
+      source: ZIP_SOURCE,
+      filter: zipFilter(selectedZipRef.current),
+      paint: { "line-color": "#e64a19", "line-width": 2.5 },
+    });
+    m.addLayer({
+      id: ZIP_PINNED,
+      type: "line",
+      source: ZIP_SOURCE,
+      filter: zipFilter(pinnedZipRef.current),
+      paint: { "line-color": "#1a2230", "line-width": 2, "line-dasharray": [2, 2] },
+    });
   }
 
   // Commute isochrone overlay (the work pin is managed separately).
@@ -275,6 +319,14 @@ export default function MapView({
   // Re-sync layers when data arrives.
   useEffect(syncZips, [geojson]);
   useEffect(syncIsochrone, [isochrone]);
+
+  // Track selection/pin changes on the outline layers.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !loaded.current || !m.getLayer(ZIP_SELECTED)) return;
+    m.setFilter(ZIP_SELECTED, zipFilter(selectedZip));
+    m.setFilter(ZIP_PINNED, zipFilter(pinnedZip));
+  }, [selectedZip, pinnedZip]);
 
   // Reflect external work-location changes (address / reset) on the pin.
   useEffect(() => {
