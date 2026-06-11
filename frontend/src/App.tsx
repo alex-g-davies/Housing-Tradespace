@@ -16,15 +16,21 @@ import {
   SCENARIO_STYLES,
   type WorkLocation,
 } from "./config";
+import { useGeolocate } from "./hooks/useGeolocate";
 import { useMapData } from "./hooks/useMapData";
 import { resolveStops } from "./lib/colorScale";
 import { centroidsByZip, scenariosContaining } from "./lib/geo";
+import { regionForPoint } from "./lib/locateRegion";
 import { parseAppUrl, serializeAppUrl } from "./lib/urlState";
 import { deltaPct, percentileRank, stateMedian } from "./lib/zipStats";
 
 // Parsed once at startup (009 R5): seeds the initial state so a deep-linked
 // region is the FIRST fetch, not a correction after a default load.
 const INITIAL_URL = parseAppUrl(window.location.search);
+
+// Geolocate only cold landings (010 R1): any recognized URL param marks an
+// intentional, shareable link whose view must not be overridden.
+const GEOLOCATE = Object.keys(INITIAL_URL).length === 0;
 
 export default function App() {
   const [budget, setBudget] = useState(INITIAL_URL.budget ?? 0);
@@ -49,6 +55,11 @@ export default function App() {
   const [focusSignal, setFocusSignal] = useState(0);
   // Deep-linked ZIP: applied once when its state's data has arrived.
   const pendingZipRef = useRef<string | null>(INITIAL_URL.zip ?? null);
+  // Geolocated landing (010 R1): a fix arriving after the user has started
+  // driving is discarded; applied at most once.
+  const userTouchedRef = useRef(false);
+  const geoAppliedRef = useRef(false);
+  const geoFix = useGeolocate(GEOLOCATE);
 
   const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
   const { geojson, isochrone, records, loading, error, notices } = useMapData(
@@ -137,6 +148,24 @@ export default function App() {
     [centroids],
   );
 
+  // Apply a geolocation fix once regions are loaded (010 R1): switch to the
+  // visitor's state with the pin at their location, silently. The WA default
+  // keeps rendering until (and unless) this fires.
+  useEffect(() => {
+    if (!geoFix || geoAppliedRef.current || userTouchedRef.current || regions.length === 0) {
+      return;
+    }
+    geoAppliedRef.current = true;
+    const r = regionForPoint(geoFix.lat, geoFix.lon, regions);
+    if (!r) return; // outside every region (e.g. abroad) -> keep the default
+    setStateCode(r.code);
+    setWork({ lat: geoFix.lat, lon: geoFix.lon });
+    setWorkLabel("Your location");
+    // Same-state fixes don't change fitBbox, so fly to the pin explicitly;
+    // cross-state fixes get the region fit (it runs after and wins).
+    setRecenter((n) => n + 1);
+  }, [geoFix, regions]);
+
   // Apply the deep-linked ZIP once its state's records + geometry are in
   // (009 R5). Unknown ZIPs are dropped silently.
   useEffect(() => {
@@ -164,10 +193,12 @@ export default function App() {
   }, [stateCode, selectedZip, budget, work, minutes, metricKey]);
 
   const handleWorkDrag = useCallback((lat: number, lon: number) => {
+    userTouchedRef.current = true;
     setWork({ lat, lon });
     setWorkLabel(null); // dragged pins have no place name
   }, []);
   const handleAddressLocated = useCallback((lat: number, lon: number, label: string) => {
+    userTouchedRef.current = true;
     setWork({ lat, lon });
     setWorkLabel(label);
     setRecenter((n) => n + 1);
@@ -186,6 +217,7 @@ export default function App() {
 
   const handleStateChange = useCallback(
     (code: string) => {
+      userTouchedRef.current = true;
       setStateCode(code);
       setSelectedZip(null); // records are per-state; stale selections are meaningless
       setPinnedZip(null);
