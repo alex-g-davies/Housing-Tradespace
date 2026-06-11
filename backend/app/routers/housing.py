@@ -1,34 +1,64 @@
 """Housing endpoints: the region index, per-ZIP enriched values (R1), and the
-merged choropleth GeoJSON (R2), all scoped to a selectable state."""
+merged choropleth GeoJSON (R2), all scoped to a selectable state.
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
+Responses are immutable until the committed data changes, so they carry a
+strong per-state ETag + daily Cache-Control and honor If-None-Match (004 R4).
+The choropleth is served from bytes pre-serialized at load time."""
 
-from ..data_loader import DataStore, get_data_store, load_regions, region_codes
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+
+from ..data_loader import (
+    DataLoadError,
+    DataStore,
+    get_data_store,
+    load_regions,
+    region_codes,
+)
 from ..models import HousingResponse, RegionInfo, ZipValue
+from ..ratelimit import DATA_LIMIT, limiter
 
 router = APIRouter(prefix="/api", tags=["housing"])
 
 DEFAULT_STATE = "WA"
+CACHE_CONTROL = "public, max-age=86400"
 
 
 def _store_for(state: str) -> DataStore:
     code = (state or DEFAULT_STATE).upper()
     if code not in region_codes():
         raise HTTPException(status_code=404, detail=f"unknown state {code!r}")
-    return get_data_store(code)
+    try:
+        return get_data_store(code)
+    except DataLoadError:
+        raise HTTPException(
+            status_code=503, detail=f"housing data temporarily unavailable for {code}"
+        ) from None
+
+
+def _not_modified(request: Request, etag: str) -> bool:
+    return request.headers.get("if-none-match") == etag
 
 
 @router.get("/regions", response_model=list[RegionInfo])
-def get_regions() -> list[RegionInfo]:
+@limiter.limit(DATA_LIMIT)
+def get_regions(request: Request, response: Response) -> list[RegionInfo]:
     """States available to select, with bounds/center for the picker + map fit."""
+    response.headers["Cache-Control"] = CACHE_CONTROL
     return [RegionInfo(**r) for r in load_regions()]
 
 
 @router.get("/housing", response_model=HousingResponse)
-def get_housing(state: str = Query(DEFAULT_STATE)) -> HousingResponse:
+@limiter.limit(DATA_LIMIT)
+def get_housing(
+    request: Request, response: Response, state: str = Query(DEFAULT_STATE)
+) -> HousingResponse | Response:
     """Per-ZIP enriched metrics for a state (R1/002). Invalid ZIPs are absent."""
     store = _store_for(state)
+    etag = store.etag.rstrip('"') + '-h"'  # distinct from the geojson validator
+    if _not_modified(request, etag):
+        return Response(status_code=304)
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = CACHE_CONTROL
     zips = [
         ZipValue(
             zip=r.zip,
@@ -44,6 +74,14 @@ def get_housing(state: str = Query(DEFAULT_STATE)) -> HousingResponse:
 
 
 @router.get("/zips.geojson")
-def get_zips_geojson(state: str = Query(DEFAULT_STATE)) -> JSONResponse:
+@limiter.limit(DATA_LIMIT)
+def get_zips_geojson(request: Request, state: str = Query(DEFAULT_STATE)) -> Response:
     """ZIP boundary FeatureCollection with scalar metrics merged in (R2)."""
-    return JSONResponse(content=_store_for(state).geojson)
+    store = _store_for(state)
+    if _not_modified(request, store.etag):
+        return Response(status_code=304)
+    return Response(
+        content=store.geojson_bytes,
+        media_type="application/json",
+        headers={"ETag": store.etag, "Cache-Control": CACHE_CONTROL},
+    )

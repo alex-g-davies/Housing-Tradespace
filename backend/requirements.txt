@@ -4,6 +4,7 @@ httpx>=0.27
 pydantic-settings>=2.2
 tzdata>=2024.1  # IANA tz database for zoneinfo (Windows has none built in)
 shapely>=2.0  # runtime: clip commute bands so they nest (app/isochrone.py)
+slowapi>=0.1.9  # per-IP rate limiting on the Mapbox proxy endpoints (spec 004)
 
 # Dev / test
 pytest>=8.0

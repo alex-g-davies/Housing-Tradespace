@@ -49,19 +49,57 @@ ZIP_PROP_CANDIDATES = ("ZCTA5CE20", "ZCTA5CE10", "ZCTA5CE", "zip", "ZIP", "GEOID
 
 # 2-letter state code -> OpenDataDE file slug (lowercase, underscores).
 STATE_SLUGS = {
-    "AL": "al_alabama", "AK": "ak_alaska", "AZ": "az_arizona", "AR": "ar_arkansas",
-    "CA": "ca_california", "CO": "co_colorado", "CT": "ct_connecticut", "DE": "de_delaware",
-    "DC": "dc_district_of_columbia", "FL": "fl_florida", "GA": "ga_georgia", "HI": "hi_hawaii",
-    "ID": "id_idaho", "IL": "il_illinois", "IN": "in_indiana", "IA": "ia_iowa",
-    "KS": "ks_kansas", "KY": "ky_kentucky", "LA": "la_louisiana", "ME": "me_maine",
-    "MD": "md_maryland", "MA": "ma_massachusetts", "MI": "mi_michigan", "MN": "mn_minnesota",
-    "MS": "ms_mississippi", "MO": "mo_missouri", "MT": "mt_montana", "NE": "ne_nebraska",
-    "NV": "nv_nevada", "NH": "nh_new_hampshire", "NJ": "nj_new_jersey", "NM": "nm_new_mexico",
-    "NY": "ny_new_york", "NC": "nc_north_carolina", "ND": "nd_north_dakota", "OH": "oh_ohio",
-    "OK": "ok_oklahoma", "OR": "or_oregon", "PA": "pa_pennsylvania", "RI": "ri_rhode_island",
-    "SC": "sc_south_carolina", "SD": "sd_south_dakota", "TN": "tn_tennessee", "TX": "tx_texas",
-    "UT": "ut_utah", "VT": "vt_vermont", "VA": "va_virginia", "WA": "wa_washington",
-    "WV": "wv_west_virginia", "WI": "wi_wisconsin", "WY": "wy_wyoming",
+    "AL": "al_alabama",
+    "AK": "ak_alaska",
+    "AZ": "az_arizona",
+    "AR": "ar_arkansas",
+    "CA": "ca_california",
+    "CO": "co_colorado",
+    "CT": "ct_connecticut",
+    "DE": "de_delaware",
+    "DC": "dc_district_of_columbia",
+    "FL": "fl_florida",
+    "GA": "ga_georgia",
+    "HI": "hi_hawaii",
+    "ID": "id_idaho",
+    "IL": "il_illinois",
+    "IN": "in_indiana",
+    "IA": "ia_iowa",
+    "KS": "ks_kansas",
+    "KY": "ky_kentucky",
+    "LA": "la_louisiana",
+    "ME": "me_maine",
+    "MD": "md_maryland",
+    "MA": "ma_massachusetts",
+    "MI": "mi_michigan",
+    "MN": "mn_minnesota",
+    "MS": "ms_mississippi",
+    "MO": "mo_missouri",
+    "MT": "mt_montana",
+    "NE": "ne_nebraska",
+    "NV": "nv_nevada",
+    "NH": "nh_new_hampshire",
+    "NJ": "nj_new_jersey",
+    "NM": "nm_new_mexico",
+    "NY": "ny_new_york",
+    "NC": "nc_north_carolina",
+    "ND": "nd_north_dakota",
+    "OH": "oh_ohio",
+    "OK": "ok_oklahoma",
+    "OR": "or_oregon",
+    "PA": "pa_pennsylvania",
+    "RI": "ri_rhode_island",
+    "SC": "sc_south_carolina",
+    "SD": "sd_south_dakota",
+    "TN": "tn_tennessee",
+    "TX": "tx_texas",
+    "UT": "ut_utah",
+    "VT": "vt_vermont",
+    "VA": "va_virginia",
+    "WA": "wa_washington",
+    "WV": "wv_west_virginia",
+    "WI": "wi_wisconsin",
+    "WY": "wy_wyoming",
 }
 
 
@@ -89,6 +127,7 @@ def normalize_zip(raw) -> str | None:
 
 
 # --- pure metric helpers (unit-testable) ---------------------------------------
+
 
 def pct_change(old: float, new: float) -> float | None:
     """Percent change old->new, rounded to 1 dp. None if old is non-positive."""
@@ -164,8 +203,10 @@ def parse_zhvi_national(zhvi_csv: str) -> tuple[str, dict[str, list[dict]]]:
     for recs in by_state.values():
         recs.sort(key=lambda r: r["zip"])
     total = sum(len(v) for v in by_state.values())
-    print(f"ZHVI national: {total} ZIPs across {len(by_state)} states, {skipped} skipped "
-          f"(as_of {latest})")
+    print(
+        f"ZHVI national: {total} ZIPs across {len(by_state)} states, {skipped} skipped "
+        f"(as_of {latest})"
+    )
     return latest, by_state
 
 
@@ -194,9 +235,7 @@ def build_geojson(geo_text: str, scalars: dict[str, dict], tolerance: float) -> 
             val = scalars[z].get(metric)
             if val is not None:
                 out_props[metric] = val
-        features_out.append(
-            {"type": "Feature", "properties": out_props, "geometry": mapping(geom)}
-        )
+        features_out.append({"type": "Feature", "properties": out_props, "geometry": mapping(geom)})
     return {"type": "FeatureCollection", "features": features_out}
 
 
@@ -228,9 +267,7 @@ def build_redfin(path: str, zips: set[str], chunksize: int = 200_000) -> dict[st
         if ptype_c:
             chunk = chunk[chunk[ptype_c] == "All Residential"]
         periods = chunk[period_c] if period_c else [""] * len(chunk)
-        for region, period_end, ppsf in zip(
-            chunk[region_c], periods, chunk[ppsf_c], strict=False
-        ):
+        for region, period_end, ppsf in zip(chunk[region_c], periods, chunk[ppsf_c], strict=False):
             if pd.isna(ppsf) or ppsf <= 0:
                 continue
             m = _ZIP_RE.search(str(region))

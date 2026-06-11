@@ -18,6 +18,8 @@ from zoneinfo import ZoneInfo
 import httpx
 from shapely.geometry import mapping, shape
 
+from . import usage
+
 logger = logging.getLogger(__name__)
 
 ISO_URL = "https://api.mapbox.com/isochrone/v1/mapbox/{profile}/{lon},{lat}"
@@ -53,6 +55,21 @@ _MAPBOX_STYLE_PROPS = {
 # In-process TTL cache: (lon, lat, minutes) -> (expires_at, variation payload).
 _CACHE: dict[tuple[float, float, int], tuple[float, dict[str, Any]]] = {}
 CACHE_TTL_SECONDS = 24 * 60 * 60
+
+# Origins are snapped to this grid (~500 m) before the cache key and any Mapbox
+# call (spec 004 R2): pin micro-drags become cache hits and the worst-case
+# unique-key cardinality an abuser can generate is bounded. Half a kilometer is
+# visually irrelevant at 15-60-minute contour scale.
+SNAP_GRID_DEG = 0.005
+
+
+def snap_origin(lat: float, lon: float) -> tuple[float, float]:
+    """Snap a work location onto the SNAP_GRID_DEG grid."""
+    return (
+        round(round(lat / SNAP_GRID_DEG) * SNAP_GRID_DEG, 6),
+        round(round(lon / SNAP_GRID_DEG) * SNAP_GRID_DEG, 6),
+    )
+
 
 _EARTH_R_M = 6_371_000.0
 _SQM_PER_SQMI = 2_589_988.110336
@@ -182,16 +199,27 @@ def _fetch_contour(
 
 
 def fetch_variation(
-    token: str, lat: float, lon: float, minutes: int, now: datetime.datetime | None = None
+    token: str,
+    lat: float,
+    lon: float,
+    minutes: int,
+    now: datetime.datetime | None = None,
+    daily_budget: int = 0,
 ) -> dict[str, Any]:
     """Build a time-of-day variation collection: the `minutes`-contour under each
     departure scenario (driving-traffic), with per-band area + a numeric summary.
-    Cached by TTL. Scenarios that fail are skipped; raises only if ALL fail."""
-    key = (round(lon, 6), round(lat, 6), minutes)
+    The origin is snapped to the cache grid first; cached by TTL. Scenarios that
+    fail are skipped; raises only if ALL fail. Raises UsageBudgetError before
+    any upstream call when the daily budget is exhausted (cache hits are free)."""
+    lat, lon = snap_origin(lat, lon)
+    key = (lon, lat, minutes)
     hit = _CACHE.get(key)
     clock = time.time()
     if hit and hit[0] > clock:
         return hit[1]
+
+    if not usage.reserve(len(SCENARIOS), daily_budget):
+        raise usage.UsageBudgetError("daily upstream budget exhausted")
 
     now = now or datetime.datetime.now(METRO_TZ)
     logger.info("Fetching commute variation: %s min from work location", minutes)
@@ -233,5 +261,6 @@ def fetch_variation(
 
 def cached_variation(lat: float, lon: float, minutes: int) -> dict[str, Any] | None:
     """Return a cached (possibly stale) payload if one exists, else None."""
-    hit = _CACHE.get((round(lon, 6), round(lat, 6), minutes))
+    lat, lon = snap_origin(lat, lon)
+    hit = _CACHE.get((lon, lat, minutes))
     return hit[1] if hit else None

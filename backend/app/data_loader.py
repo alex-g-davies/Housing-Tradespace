@@ -7,6 +7,7 @@ zero-padded string on both the ZHVI and ZCTA sides.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -20,6 +21,13 @@ logger = logging.getLogger(__name__)
 
 STATES_DIR = DATA_DIR / "states"
 REGIONS_FILE = DATA_DIR / "regions.json"
+
+
+class DataLoadError(Exception):
+    """A state's committed data files are missing or corrupt (spec 004 R7).
+
+    Routers translate this into a 503 for that state only — never a 500
+    traceback; other states keep working."""
 
 
 def normalize_zip(raw: Any) -> str | None:
@@ -176,21 +184,38 @@ def merge_geojson(geojson_raw: dict[str, Any], records: dict[str, ZipRecord]) ->
 class DataStore:
     housing: ParsedHousing
     geojson: dict[str, Any]
+    # Pre-serialized choropleth + a version tag derived from the source files,
+    # so /api/zips.geojson serves cached bytes with a strong ETag instead of
+    # re-serializing multi-MB JSON per request (spec 004 R4).
+    geojson_bytes: bytes = b""
+    etag: str = ""
 
     @classmethod
     def load(cls, state: str, states_dir: Path = STATES_DIR) -> DataStore:
-        """Load one state's committed housing values + choropleth geometry."""
-        with open(states_dir / f"{state}.zhvi.json", encoding="utf-8") as f:
-            housing = parse_housing(json.load(f))
-        with open(states_dir / f"{state}.geojson", encoding="utf-8") as f:
-            geojson = merge_geojson(json.load(f), housing.records)
+        """Load one state's committed housing values + choropleth geometry.
+
+        Raises DataLoadError when either file is missing or unparseable."""
+        try:
+            zhvi_bytes = (states_dir / f"{state}.zhvi.json").read_bytes()
+            geo_bytes = (states_dir / f"{state}.geojson").read_bytes()
+            housing = parse_housing(json.loads(zhvi_bytes))
+            geojson = merge_geojson(json.loads(geo_bytes), housing.records)
+        except (OSError, ValueError) as exc:
+            logger.error("DataStore[%s]: failed to load data files: %s", state, exc)
+            raise DataLoadError(f"data unavailable for state {state!r}") from exc
+        version = hashlib.sha256(zhvi_bytes + geo_bytes).hexdigest()[:16]
         logger.info(
             "DataStore[%s]: %d ZIP records, %d geojson features",
             state,
             len(housing.records),
             len(geojson["features"]),
         )
-        return cls(housing=housing, geojson=geojson)
+        return cls(
+            housing=housing,
+            geojson=geojson,
+            geojson_bytes=json.dumps(geojson, separators=(",", ":")).encode("utf-8"),
+            etag=f'"{state}-{version}"',
+        )
 
 
 @lru_cache(maxsize=8)
@@ -209,3 +234,27 @@ def load_regions() -> list[dict[str, Any]]:
 
 def region_codes() -> set[str]:
     return {r["code"] for r in load_regions()}
+
+
+# Degrees of slack around each region bbox: generous enough that a work
+# location just across a state line still resolves, tight enough to keep the
+# isochrone proxy from being driven from arbitrary points on Earth (004 R2).
+COVERAGE_BUFFER_DEG = 0.5
+
+
+def within_coverage(lat: float, lon: float) -> bool:
+    """True when (lat, lon) falls inside any loaded region's buffered bbox.
+
+    With no region index (bare dev checkout), everything passes — the geofence
+    exists to bound public Mapbox spend, not to gate local development."""
+    regions = load_regions()
+    if not regions:
+        return True
+    for r in regions:
+        west, south, east, north = r["bbox"]
+        if (
+            south - COVERAGE_BUFFER_DEG <= lat <= north + COVERAGE_BUFFER_DEG
+            and west - COVERAGE_BUFFER_DEG <= lon <= east + COVERAGE_BUFFER_DEG
+        ):
+            return True
+    return False

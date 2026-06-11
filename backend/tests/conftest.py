@@ -8,11 +8,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import data_loader
+from app import data_loader, usage
 from app import geocode as geo_module
 from app import isochrone as iso_module
 from app.config import Settings, get_settings
 from app.main import app
+from app.ratelimit import limiter
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -34,9 +35,13 @@ def _make_settings(**overrides) -> Settings:
 def _clear_caches():
     iso_module.clear_cache()
     geo_module.clear_cache()
+    usage.reset()
+    limiter.reset()
     yield
     iso_module.clear_cache()
     geo_module.clear_cache()
+    usage.reset()
+    limiter.reset()
 
 
 @pytest.fixture(autouse=True)
@@ -53,26 +58,56 @@ def _state_data(tmp_path, monkeypatch):
 
     (sdir / "OH.zhvi.json").write_text(
         json.dumps(
-            {"state": "OH", "name": "Ohio", "as_of": "2024-12-31",
-             "zips": [{"zip": "43001", "median_value": 160000}]}
+            {
+                "state": "OH",
+                "name": "Ohio",
+                "as_of": "2024-12-31",
+                "zips": [{"zip": "43001", "median_value": 160000}],
+            }
         ),
         encoding="utf-8",
     )
     (sdir / "OH.geojson").write_text(
         json.dumps(
-            {"type": "FeatureCollection", "features": [
-                {"type": "Feature", "properties": {"zip": "43001"},
-                 "geometry": {"type": "Polygon", "coordinates":
-                              [[[-82.7, 40.0], [-82.6, 40.0], [-82.6, 40.1], [-82.7, 40.1],
-                                [-82.7, 40.0]]]}}]}
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"zip": "43001"},
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [
+                                    [-82.7, 40.0],
+                                    [-82.6, 40.0],
+                                    [-82.6, 40.1],
+                                    [-82.7, 40.1],
+                                    [-82.7, 40.0],
+                                ]
+                            ],
+                        },
+                    }
+                ],
+            }
         ),
         encoding="utf-8",
     )
     regions = [
-        {"code": "WA", "name": "Washington", "bbox": [-122.36, 47.6, -122.28, 47.7],
-         "center": [-122.32, 47.65], "zip_count": 5},
-        {"code": "OH", "name": "Ohio", "bbox": [-82.7, 40.0, -82.6, 40.1],
-         "center": [-82.65, 40.05], "zip_count": 1},
+        {
+            "code": "WA",
+            "name": "Washington",
+            "bbox": [-122.36, 47.6, -122.28, 47.7],
+            "center": [-122.32, 47.65],
+            "zip_count": 5,
+        },
+        {
+            "code": "OH",
+            "name": "Ohio",
+            "bbox": [-82.7, 40.0, -82.6, 40.1],
+            "center": [-82.65, 40.05],
+            "zip_count": 1,
+        },
     ]
     rfile = tmp_path / "regions.json"
     rfile.write_text(json.dumps(regions), encoding="utf-8")

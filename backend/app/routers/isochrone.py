@@ -7,10 +7,11 @@ import json
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..config import DATA_DIR, Settings, get_settings
+from ..data_loader import within_coverage
 from ..isochrone import (
     build_collection,
     cached_variation,
@@ -18,6 +19,8 @@ from ..isochrone import (
     geodesic_area_sqmi,
     strip_mapbox_props,
 )
+from ..ratelimit import UPSTREAM_LIMIT, limiter
+from ..usage import UsageBudgetError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["isochrone"])
@@ -44,7 +47,9 @@ def _load_fixture(settings: Settings, lat: float, lon: float, minutes: int) -> d
 
 
 @router.get("/isochrone")
+@limiter.limit(UPSTREAM_LIMIT)
 def get_isochrone(
+    request: Request,
     lat: float | None = Query(None, ge=-90, le=90, description="Work latitude"),
     lon: float | None = Query(None, ge=-180, le=180, description="Work longitude"),
     minutes: int | None = Query(None, description="Commute minutes (15/30/45/60)"),
@@ -57,17 +62,28 @@ def get_isochrone(
     mins = minutes if minutes is not None else settings.contour_minutes
     if mins not in ALLOWED_MINUTES:
         raise HTTPException(status_code=422, detail=f"minutes must be one of {ALLOWED_MINUTES}")
+    if not within_coverage(work_lat, work_lon):
+        raise HTTPException(status_code=422, detail="work location is outside the covered regions")
 
     if settings.serve_fixture:
         return JSONResponse(content=_load_fixture(settings, work_lat, work_lon, mins))
 
     try:
         return JSONResponse(
-            content=fetch_variation(settings.mapbox_token, work_lat, work_lon, mins)
+            content=fetch_variation(
+                settings.mapbox_token,
+                work_lat,
+                work_lon,
+                mins,
+                daily_budget=settings.mapbox_daily_call_budget,
+            )
         )
-    except httpx.HTTPError:
+    except (httpx.HTTPError, UsageBudgetError) as exc:
         # Never leak the token (which lives in the request URL) into the error.
-        logger.warning("Isochrone upstream call failed", exc_info=False)
+        if isinstance(exc, UsageBudgetError):
+            logger.warning("Isochrone skipped: daily upstream budget exhausted")
+        else:
+            logger.warning("Isochrone upstream call failed", exc_info=False)
         stale = cached_variation(work_lat, work_lon, mins)
         if stale is not None:
             return JSONResponse(content=stale)

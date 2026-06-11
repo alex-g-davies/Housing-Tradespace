@@ -30,8 +30,18 @@ class Settings(BaseSettings):
     contour_minutes: int = 30
     use_fixture: bool = False
 
-    # Frontend dev origin allowed through CORS.
+    # Frontend dev origin allowed through CORS. In production the SPA is served
+    # same-origin by this app (spec 006), so this matters for local dev only.
+    # Env format: CORS_ORIGINS='["https://example.com"]'
     cors_origins: list[str] = ["http://localhost:5173"]
+
+    # Hard daily cap on upstream Mapbox calls across all endpoints (spec 004 R3).
+    # Cache hits spend nothing. 0 disables the breaker.
+    mapbox_daily_call_budget: int = 2000
+
+    # "text" (human-readable, default) or "json" (single-line JSON for cloud
+    # log ingestion). Read once at startup.
+    log_format: str = "text"
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",

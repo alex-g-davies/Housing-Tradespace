@@ -4,11 +4,13 @@ server-side (R5); the client sends only a free-text query."""
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..config import Settings, get_settings
 from ..geocode import forward_geocode
 from ..models import GeocodeResult
+from ..ratelimit import UPSTREAM_LIMIT, limiter
+from ..usage import UsageBudgetError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["geocode"])
@@ -18,14 +20,25 @@ SEATTLE_LON, SEATTLE_LAT = -122.3321, 47.6062
 
 
 @router.get("/geocode", response_model=GeocodeResult)
+@limiter.limit(UPSTREAM_LIMIT)
 def geocode(
+    request: Request,
     q: str = Query(..., min_length=1, description="Address or place to find"),
     settings: Settings = Depends(get_settings),
 ) -> GeocodeResult:
     if not settings.mapbox_token.strip():
         raise HTTPException(status_code=503, detail="geocoding unavailable (no token configured)")
     try:
-        result = forward_geocode(settings.mapbox_token, q, SEATTLE_LON, SEATTLE_LAT)
+        result = forward_geocode(
+            settings.mapbox_token,
+            q,
+            SEATTLE_LON,
+            SEATTLE_LAT,
+            daily_budget=settings.mapbox_daily_call_budget,
+        )
+    except UsageBudgetError:
+        logger.warning("Geocoding skipped: daily upstream budget exhausted")
+        raise HTTPException(status_code=503, detail="geocoding temporarily unavailable") from None
     except httpx.HTTPError:
         logger.warning("Geocoding upstream call failed")
         raise HTTPException(status_code=503, detail="geocoding upstream unavailable") from None

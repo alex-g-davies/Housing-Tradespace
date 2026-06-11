@@ -13,6 +13,8 @@ from urllib.parse import quote
 
 import httpx
 
+from . import usage
+
 logger = logging.getLogger(__name__)
 
 GEOCODE_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places/{query}.json"
@@ -27,16 +29,24 @@ def clear_cache() -> None:
 
 
 def forward_geocode(
-    token: str, query: str, proximity_lon: float, proximity_lat: float
+    token: str,
+    query: str,
+    proximity_lon: float,
+    proximity_lat: float,
+    daily_budget: int = 0,
 ) -> dict[str, Any] | None:
     """Resolve an address/place to {lat, lon, place_name}, biased toward the
     proximity point. Returns None when there is no match. Raises httpx.HTTPError
-    on upstream failure."""
+    on upstream failure, UsageBudgetError when the daily budget is exhausted
+    (cache hits, including cached misses, are free)."""
     key = query.strip().lower()
     now = time.time()
     hit = _CACHE.get(key)
     if hit and hit[0] > now:
         return hit[1]
+
+    if not usage.reserve(1, daily_budget):
+        raise usage.UsageBudgetError("daily upstream budget exhausted")
 
     url = GEOCODE_URL.format(query=quote(query.strip()))
     params = {

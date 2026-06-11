@@ -1,0 +1,99 @@
+# Spec 004 — Backend Hardening for Public Exposure
+
+Status: Draft
+Owner: <you>
+Related: 001-mvp (R5 key safety), 003-commute-depth (isochrone proxy), 006-deployment
+
+## Overview
+
+The backend currently proxies two paid Mapbox APIs (Isochrone, Geocoding) with
+no rate limiting, no geographic fence, and no upstream spending cap, and it
+re-serializes multi-megabyte GeoJSON on every request. Before the app is
+exposed on a public URL, the proxy must be abuse-resistant (a bot must not be
+able to drain the Mapbox quota), responses must be cacheable, and failures must
+be observable and graceful. This spec hardens the existing API without changing
+its shape: no endpoint paths, response schemas, or frontend code change.
+
+## Context
+
+- Each live `/api/isochrone` request triggers up to 3 upstream Mapbox calls
+  (off-peak / typical / peak scenarios). The in-process 24 h TTL cache only
+  helps for repeated identical coordinates; the raw key uses 6-decimal
+  rounding (~10 cm), so every pin micro-drag is a cache miss.
+- The deployment target (spec 006) is a single always-on container behind the
+  platform's reverse proxy, so in-process rate limiting and caching are
+  sufficient — no Redis needed at this scale.
+- The platform terminates TLS and forwards the client IP in `X-Forwarded-For`.
+
+## Requirements
+
+- **R1 — Per-IP rate limiting.** Token-spending endpoints (`/api/isochrone`,
+  `/api/geocode`) are limited to 10 requests/minute per client IP; data
+  endpoints (`/api/housing`, `/api/zips.geojson`, `/api/regions`) to 60/minute.
+  Exceeding the limit returns 429. The client IP is taken from the first entry
+  of `X-Forwarded-For` when present (the platform proxy sets it), else the
+  socket peer.
+- **R2 — Geofence + origin snapping.** `/api/isochrone` rejects (422) work
+  locations outside the union of loaded-region bounding boxes (+0.5° buffer).
+  Before the cache key and any Mapbox call, the origin is snapped to a 0.005°
+  (~500 m) grid, bounding worst-case unique-key cardinality and turning pin
+  micro-drags into cache hits. ~500 m is visually irrelevant at 15–60-minute
+  contour scale. `/api/geocode` remains constrained to `country=us`.
+- **R3 — Daily upstream budget breaker.** A process-wide daily counter caps
+  total upstream Mapbox calls (`MAPBOX_DAILY_CALL_BUDGET`, default 2000; 0
+  disables). When exhausted, `/api/isochrone` serves a stale cached payload if
+  one exists, else 503; `/api/geocode` returns 503. Cache hits spend nothing.
+- **R4 — HTTP caching + compression.** `/api/zips.geojson` is pre-serialized
+  once per state (no per-request re-serialization) and served with a strong
+  `ETag` and `Cache-Control: public, max-age=86400`; `If-None-Match` returns
+  304\. `/api/housing` carries the same validator semantics; `/api/regions`
+  carries `Cache-Control`. Responses ≥1 KB are gzip-compressed when the client
+  accepts it.
+- **R5 — Structured request logging.** Every API request logs method, path,
+  status, duration (ms), and client IP. `LOG_FORMAT=json` switches all app
+  logs to single-line JSON for cloud log ingestion; default stays
+  human-readable. Health-probe requests are not logged. The Mapbox token never
+  appears in any log line (001-R5 preserved).
+- **R6 — Meaningful health check.** `/api/health` verifies the region index
+  parses and at least one state store loads; returns
+  `{status, version, states}` with 200, or 503 when data is unavailable. Stays
+  fast after first call (stores are cached) — it is the platform's probe.
+- **R7 — Graceful data failure.** A missing or corrupt state data file yields
+  a 503 with a clean detail message for that state only — never a 500
+  traceback; other states keep working.
+
+## Non-functional / Constraints
+
+- No new infrastructure (no Redis, no database); all state is in-process.
+- No endpoint path or response-schema changes; the frontend is untouched.
+- Rate-limit ceilings and the daily budget are env-tunable without code edits.
+- All Mapbox-token handling rules from 001-R5 continue to hold.
+
+## Acceptance Criteria
+
+- [ ] Hammering `/api/isochrone` past 10 req/min from one IP returns 429, and
+      upstream Mapbox call count stays flat (verified via logs/mock).
+- [ ] An out-of-coverage origin (e.g. lat=0, lon=0) returns 422 with a clear
+      message; two origins <500 m apart produce one set of upstream calls.
+- [ ] With the daily budget exhausted, `/api/isochrone` returns stale-cache or
+      503 and makes zero upstream calls.
+- [ ] Second request to `/api/zips.geojson` with `If-None-Match` returns 304;
+      responses are gzipped when `Accept-Encoding: gzip` is sent.
+- [ ] A corrupted state file produces 503 for that state; `/api/health`
+      reports 503 when no data loads and 200 with state count otherwise.
+- [ ] `pytest` passes with new tests covering each behavior above; `ruff
+      check` is clean.
+
+## Out of Scope (explicit)
+
+- Authentication / API keys for end users.
+- Redis or any shared cache across processes.
+- CDN configuration (spec 006 may add platform-level caching).
+- Frontend changes of any kind (spec 005).
+
+## Verification notes
+
+429 → R1; out-of-bounds 422 + snap cache hit → R2; budget 503/stale → R3;
+ETag/304/gzip → R4; log lines → R5; health 200/503 → R6; corrupt-file 503 →
+R7. Verify manually with curl against a local server plus the automated tests;
+the implementing agent does not self-certify done.
