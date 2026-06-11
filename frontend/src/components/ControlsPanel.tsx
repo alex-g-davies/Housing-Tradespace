@@ -1,5 +1,5 @@
 import type { CommuteVariation, RegionInfo, ZipValue } from "../api/client";
-import type { ColorStop, MetricDef, MetricKey } from "../config";
+import type { ColorStop, MetricDef, MetricKey, TravelMode } from "../config";
 import AboutPanel from "./AboutPanel";
 import AddressSearch from "./AddressSearch";
 import BudgetInput from "./BudgetInput";
@@ -22,6 +22,8 @@ interface Props {
   minutes: number;
   onMinutesChange: (minutes: number) => void;
   variation: CommuteVariation | null;
+  mode: TravelMode;
+  onModeChange: (mode: TravelMode) => void;
   onAddressLocated: (lat: number, lon: number, label: string) => void;
   /** Bias point for address search — the selected region's center. */
   searchProximity: { lat: number; lon: number } | null;
@@ -43,6 +45,8 @@ export default function ControlsPanel({
   minutes,
   onMinutesChange,
   variation,
+  mode,
+  onModeChange,
   onAddressLocated,
   searchProximity,
   records,
@@ -70,6 +74,8 @@ export default function ControlsPanel({
           minutes={minutes}
           onMinutesChange={onMinutesChange}
           variation={variation}
+          mode={mode}
+          onModeChange={onModeChange}
         />
       </div>
 

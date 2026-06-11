@@ -171,6 +171,15 @@ export const IN_BUDGET_OPACITY = 0.9;
 export const COMMUTE_STEPS = [15, 30, 45, 60] as const;
 export const DEFAULT_MINUTES = 30;
 
+// Travel modes (013 R2). Public transit deferred: Mapbox has no transit API.
+export type TravelMode = "drive" | "walk" | "cycle";
+export const TRAVEL_MODES: { key: TravelMode; icon: string; label: string }[] = [
+  { key: "drive", icon: "🚗", label: "Driving" },
+  { key: "cycle", icon: "🚲", label: "Cycling" },
+  { key: "walk", icon: "🚶", label: "Walking" },
+];
+export const DEFAULT_MODE: TravelMode = "drive";
+
 // Departure scenarios, outer (widest reach) -> inner. Keys match the backend
 // `scenario` property; order drives the legend.
 export interface ScenarioStyle {

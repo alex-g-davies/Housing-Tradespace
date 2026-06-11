@@ -1,17 +1,42 @@
 import type { CommuteVariation } from "../api/client";
-import { COMMUTE_STEPS, SCENARIO_STYLES } from "../config";
+import { COMMUTE_STEPS, SCENARIO_STYLES, TRAVEL_MODES, type TravelMode } from "../config";
 import { formatSqMi } from "../lib/format";
 
 interface Props {
   minutes: number;
   onMinutesChange: (minutes: number) => void;
   variation: CommuteVariation | null;
+  mode: TravelMode;
+  onModeChange: (mode: TravelMode) => void;
 }
 
-/** Commute-time selector (15/30/45/60) + the time-of-day reach-variation summary. */
-export default function CommuteControl({ minutes, onMinutesChange, variation }: Props) {
+/** Commute controls: travel mode (013 R2), time (15/30/45/60), and — for
+ * driving — the time-of-day reach-variation breakdown. */
+export default function CommuteControl({
+  minutes,
+  onMinutesChange,
+  variation,
+  mode,
+  onModeChange,
+}: Props) {
   return (
     <div className="commute">
+      <span className="section-label">Commute</span>
+      <div className="switcher" role="group" aria-label="Travel mode">
+        {TRAVEL_MODES.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            className={m.key === mode ? "switcher__btn switcher__btn--active" : "switcher__btn"}
+            aria-pressed={m.key === mode}
+            aria-label={m.label}
+            title={m.label}
+            onClick={() => onModeChange(m.key)}
+          >
+            {m.icon}
+          </button>
+        ))}
+      </div>
       <span className="section-label">Commute time (min)</span>
       <div className="switcher" role="group" aria-label="Commute time (minutes)">
         {COMMUTE_STEPS.map((m) => (
@@ -28,8 +53,9 @@ export default function CommuteControl({ minutes, onMinutesChange, variation }: 
         ))}
       </div>
 
-      {/* Scenario detail is collapsible but starts expanded — the numbers are
-          part of the product's value; folding is for small screens. */}
+      {/* Traffic scenarios only exist for driving (013 R2): walk/cycle reach
+          is time-invariant and renders as a single contour. */}
+      {mode !== "drive" ? null : (
       <details className="panel-fold" open>
         <summary>Traffic scenarios</summary>
         <ul className="scenarios">
@@ -59,6 +85,7 @@ export default function CommuteControl({ minutes, onMinutesChange, variation }: 
           Typical traffic for each hour, leaving your workplace — bad days run longer.
         </p>
       </details>
+      )}
     </div>
   );
 }

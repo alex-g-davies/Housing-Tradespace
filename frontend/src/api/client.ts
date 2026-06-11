@@ -49,8 +49,11 @@ export interface RegionInfo {
 
 export const getRegions = () => getJson<RegionInfo[]>("/regions");
 
-export const getIsochrone = (lat: number, lon: number, minutes: number) =>
-  getJson<FeatureCollection>(`/isochrone?lat=${lat}&lon=${lon}&minutes=${minutes}`);
+export const getIsochrone = (lat: number, lon: number, minutes: number, mode = "drive") =>
+  getJson<FeatureCollection>(
+    `/isochrone?lat=${lat}&lon=${lon}&minutes=${minutes}` +
+      (mode === "drive" ? "" : `&mode=${mode}`),
+  );
 
 export interface GeocodeResult {
   lat: number;
@@ -58,19 +61,30 @@ export interface GeocodeResult {
   place_name: string;
 }
 
-/** Routed AM/PM commute estimate for a (home, work) pair (spec 011). */
+/** Routed commute estimate for a (home, work) pair (spec 013): min–max over
+ * rush-window samples for drive; min == max with null windows for walk/cycle. */
 export interface CommuteEstimate {
-  am_minutes: number;
-  am_depart_local: string;
-  pm_minutes: number;
-  pm_depart_local: string;
+  mode: string;
+  am_min_minutes: number;
+  am_max_minutes: number;
+  am_window_start_local: string | null;
+  am_window_end_local: string | null;
+  pm_min_minutes: number;
+  pm_max_minutes: number;
+  pm_window_start_local: string | null;
+  pm_window_end_local: string | null;
 }
 
-/** Routed drive times home->work (AM) and work->home (PM). Throws on any
- * non-OK status — callers treat failures as "no estimate" (best-effort). */
-export const getCommute = (from: { lat: number; lon: number }, to: { lat: number; lon: number }) =>
+/** Routed times home->work (AM) and work->home (PM). Throws on any non-OK
+ * status — callers treat failures as "no estimate" (best-effort). */
+export const getCommute = (
+  from: { lat: number; lon: number },
+  to: { lat: number; lon: number },
+  mode = "drive",
+) =>
   getJson<CommuteEstimate>(
-    `/commute?from_lat=${from.lat}&from_lon=${from.lon}&to_lat=${to.lat}&to_lon=${to.lon}`,
+    `/commute?from_lat=${from.lat}&from_lon=${from.lon}&to_lat=${to.lat}&to_lon=${to.lon}` +
+      (mode === "drive" ? "" : `&mode=${mode}`),
   );
 
 /** Reach-area variation across departure scenarios (spec 003). */

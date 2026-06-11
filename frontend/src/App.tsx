@@ -8,11 +8,13 @@ import Toasts from "./components/Toasts";
 import ZipDetailPanel, { type ZipContext } from "./components/ZipDetailPanel";
 import {
   DEFAULT_MINUTES,
+  DEFAULT_MODE,
   DEFAULT_STATE,
   DEFAULT_WORK,
   METRICS,
   type MetricKey,
   SCENARIO_STYLES,
+  type TravelMode,
   type WorkLocation,
 } from "./config";
 import { useCommute } from "./hooks/useCommute";
@@ -20,7 +22,7 @@ import { useGeolocate } from "./hooks/useGeolocate";
 import { useMapData } from "./hooks/useMapData";
 import { useWikiSummary } from "./hooks/useWikiSummary";
 import { metricValuesFromFeatures, resolveStops } from "./lib/colorScale";
-import { departLabel } from "./lib/format";
+import { departLabel, rangeLabel } from "./lib/format";
 import { centroidsByZip, scenariosContaining } from "./lib/geo";
 import { regionForPoint } from "./lib/locateRegion";
 import { parseAppUrl, serializeAppUrl } from "./lib/urlState";
@@ -38,6 +40,7 @@ export default function App() {
   const [budget, setBudget] = useState(INITIAL_URL.budget ?? 0);
   const [metricKey, setMetricKey] = useState<MetricKey>(INITIAL_URL.metric ?? "value");
   const [minutes, setMinutes] = useState<number>(INITIAL_URL.minutes ?? DEFAULT_MINUTES);
+  const [mode, setMode] = useState<TravelMode>(INITIAL_URL.tmode ?? DEFAULT_MODE);
   const [work, setWork] = useState<WorkLocation>(INITIAL_URL.work ?? DEFAULT_WORK);
   const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [stateCode, setStateCode] = useState<string>(INITIAL_URL.state ?? DEFAULT_STATE);
@@ -59,10 +62,11 @@ export default function App() {
   const geoFix = useGeolocate(GEOLOCATE);
 
   const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
-  const { geojson, isochrone, records, loading, error, notices } = useMapData(
+  const { geojson, isochrone, records, loading, isoLoading, error, notices } = useMapData(
     stateCode,
     work,
     minutes,
+    mode,
   );
 
   const [regionsFailed, setRegionsFailed] = useState(false);
@@ -101,10 +105,11 @@ export default function App() {
   // One centroid per ZIP (009): commute-reach check now, fly-to targets later.
   const centroids = useMemo(() => centroidsByZip(geojson), [geojson]);
 
-  // Routed AM/PM drive times for the selected ZIP (011 R2/R3) — best-effort.
-  const commute = useCommute(
+  // Routed AM/PM commute estimates for the selected ZIP (013) — best-effort.
+  const { estimate: commute, loading: commuteLoading } = useCommute(
     selectedZip ? (centroids.get(selectedZip) ?? null) : null,
     work,
+    mode,
   );
 
   // Wikipedia summary of the selected place (012 R3) — best-effort.
@@ -141,18 +146,31 @@ export default function App() {
         ? `Within a ${minutes}-min drive of work in typical ${best.label.toLowerCase()} — bad days run longer`
         : `Beyond a ${minutes}-min drive of work in typical traffic`;
     }
-    return {
-      percentile,
-      vsStateMedianPct,
-      commuteReach,
-      driveToWork: commute
-        ? `Drive to work: ~${commute.am_minutes} min (${departLabel(commute.am_depart_local)})`
-        : null,
-      driveHome: commute
-        ? `Drive home: ~${commute.pm_minutes} min (${departLabel(commute.pm_depart_local)})`
-        : null,
-    };
-  }, [selectedZip, records, centroids, isochrone, minutes, commute]);
+    // Mode-aware estimate lines (013 R3): ranges + windows for drive,
+    // single un-timed durations for walk/cycle.
+    const verb = { drive: "Drive", walk: "Walk", cycle: "Cycle" }[mode];
+    let driveToWork: string | null = null;
+    let driveHome: string | null = null;
+    if (commute) {
+      const amRange = rangeLabel(commute.am_min_minutes, commute.am_max_minutes);
+      const pmRange = rangeLabel(commute.pm_min_minutes, commute.pm_max_minutes);
+      const amWindow =
+        commute.am_window_start_local && commute.am_window_end_local
+          ? ` (departing ${departLabel(commute.am_window_start_local)}–${departLabel(
+              commute.am_window_end_local,
+            ).replace(/^\w+ /, "")})`
+          : "";
+      const pmWindow =
+        commute.pm_window_start_local && commute.pm_window_end_local
+          ? ` (departing ${departLabel(commute.pm_window_start_local)}–${departLabel(
+              commute.pm_window_end_local,
+            ).replace(/^\w+ /, "")})`
+          : "";
+      driveToWork = `${verb} to work: ${amRange}${amWindow}`;
+      driveHome = `${verb} home: ${pmRange}${pmWindow}`;
+    }
+    return { percentile, vsStateMedianPct, commuteReach, driveToWork, driveHome };
+  }, [selectedZip, records, centroids, isochrone, minutes, commute, mode]);
 
   // Esc closes the detail panel (009 R1).
   useEffect(() => {
@@ -212,11 +230,12 @@ export default function App() {
         work,
         minutes,
         metric: metricKey,
+        tmode: mode,
       });
       window.history.replaceState(null, "", `${window.location.pathname}${qs}`);
     }, 300);
     return () => window.clearTimeout(t);
-  }, [stateCode, selectedZip, budget, work, minutes, metricKey]);
+  }, [stateCode, selectedZip, budget, work, minutes, metricKey, mode]);
 
   const handleWorkDrag = useCallback((lat: number, lon: number) => {
     userTouchedRef.current = true;
@@ -270,6 +289,7 @@ export default function App() {
           stateCode={stateCode}
           budget={budget}
           context={zipContext}
+          estimating={commuteLoading}
           wiki={wiki}
           onClose={() => setSelectedZip(null)}
           pinnedZip={pinnedZip}
@@ -291,11 +311,23 @@ export default function App() {
         minutes={minutes}
         onMinutesChange={setMinutes}
         variation={variation}
+        mode={mode}
+        onModeChange={setMode}
         onAddressLocated={handleAddressLocated}
         searchProximity={region?.center ? { lat: region.center[1], lon: region.center[0] } : null}
         records={records}
         onZipChosen={selectZipAndFly}
       />
+      <button
+        type="button"
+        className="recenter"
+        aria-label="Recenter on the work pin"
+        title="Recenter on the work pin"
+        onClick={() => setRecenter((n) => n + 1)}
+      >
+        ⌖
+      </button>
+      {isoLoading && <div className="iso-chip">Updating reach…</div>}
       <Onboarding />
       <Toasts
         messages={[

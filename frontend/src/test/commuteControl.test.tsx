@@ -12,9 +12,22 @@ const variation: CommuteVariation = {
   peak_shrink_pct: 36.2,
 };
 
-describe("CommuteControl (003)", () => {
+function renderControl(overrides: Partial<Parameters<typeof CommuteControl>[0]> = {}) {
+  const props = {
+    minutes: 30,
+    onMinutesChange: vi.fn(),
+    variation: variation as CommuteVariation | null,
+    mode: "drive" as const,
+    onModeChange: vi.fn(),
+    ...overrides,
+  };
+  render(<CommuteControl {...props} />);
+  return props;
+}
+
+describe("CommuteControl (003/013)", () => {
   it("renders a button per step and marks the active one", () => {
-    render(<CommuteControl minutes={30} onMinutesChange={() => {}} variation={variation} />);
+    renderControl();
     for (const m of COMMUTE_STEPS) {
       expect(screen.getByRole("button", { name: `${m} minutes` })).toBeInTheDocument();
     }
@@ -25,21 +38,43 @@ describe("CommuteControl (003)", () => {
   });
 
   it("emits the chosen minutes", () => {
-    const onChange = vi.fn();
-    render(<CommuteControl minutes={30} onMinutesChange={onChange} variation={null} />);
+    const props = renderControl({ variation: null });
     fireEvent.click(screen.getByRole("button", { name: "45 minutes" }));
-    expect(onChange).toHaveBeenCalledWith(45);
+    expect(props.onMinutesChange).toHaveBeenCalledWith(45);
   });
 
-  it("starts with the traffic-scenarios fold expanded", () => {
-    const { container } = render(
-      <CommuteControl minutes={30} onMinutesChange={() => {}} variation={variation} />,
+  it("offers drive/cycle/walk modes and emits changes (013 R2)", () => {
+    const props = renderControl();
+    expect(screen.getByRole("button", { name: "Driving" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
-    expect(container.querySelector("details")!.open).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Walking" }));
+    expect(props.onModeChange).toHaveBeenCalledWith("walk");
+  });
+
+  it("hides the traffic-scenarios fold for non-drive modes", () => {
+    const { container } = render(
+      <CommuteControl
+        minutes={30}
+        onMinutesChange={() => {}}
+        variation={null}
+        mode="walk"
+        onModeChange={() => {}}
+      />,
+    );
+    expect(container.querySelector("details")).toBeNull();
+  });
+
+  it("starts with the traffic-scenarios fold expanded for drive", () => {
+    renderControl();
+    const details = document.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details!.open).toBe(true);
   });
 
   it("shows the scenario legend with per-band areas and the shrink summary", () => {
-    render(<CommuteControl minutes={30} onMinutesChange={() => {}} variation={variation} />);
+    renderControl();
     expect(screen.getByText("Light traffic")).toBeInTheDocument();
     expect(screen.getByText("Evening rush")).toBeInTheDocument();
     expect(screen.getByText("468 mi²")).toBeInTheDocument();
@@ -48,7 +83,7 @@ describe("CommuteControl (003)", () => {
   });
 
   it("falls back to a muted note when variation is unavailable", () => {
-    render(<CommuteControl minutes={30} onMinutesChange={() => {}} variation={null} />);
+    renderControl({ variation: null });
     expect(screen.getByText(/variation unavailable/i)).toBeInTheDocument();
   });
 });

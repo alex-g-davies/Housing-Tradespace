@@ -25,6 +25,8 @@ interface Props {
   stateCode: string;
   budget: number;
   context: ZipContext;
+  /** True while the commute estimate fetch is in flight (013 R3). */
+  estimating: boolean;
   /** Wikipedia summary of the place (012 R3); null hides the section. */
   wiki: WikiSummary | null;
   onClose: () => void;
@@ -141,6 +143,7 @@ export default function ZipDetailPanel({
   stateCode,
   budget,
   context,
+  estimating,
   wiki,
   onClose,
   pinnedZip,
@@ -213,6 +216,9 @@ export default function ZipDetailPanel({
           <PriceChart history={record?.history ?? null} />
 
           <div className="zip-detail__context">
+            {estimating && !context.driveToWork && (
+              <p className="zip-detail__estimating">Estimating commute…</p>
+            )}
             {context.driveToWork && (
               <p className="zip-detail__drive">
                 <strong>{context.driveToWork}</strong>

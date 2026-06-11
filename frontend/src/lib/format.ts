@@ -50,6 +50,13 @@ export function placeLabel(
   return stateCode ? `${name}, ${stateCode} ${zip}` : `${name} ${zip}`;
 }
 
+/** Minute range, e.g. (55, 73) -> "55–73 min", collapsing to "~55 min". */
+export function rangeLabel(minMinutes: number, maxMinutes: number): string {
+  return minMinutes === maxMinutes
+    ? `~${minMinutes} min`
+    : `${minMinutes}–${maxMinutes} min`;
+}
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** Naive local departure timestamp -> "Mon 8:00 AM"; bad input -> "". */

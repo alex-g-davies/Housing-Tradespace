@@ -467,6 +467,50 @@ body,
   );
 }
 
+/* Recenter-on-pin map button (013 R4): below the nav controls. */
+.recenter {
+  position: absolute;
+  top: 110px;
+  right: 10px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(20, 30, 50, 0.2);
+  cursor: pointer;
+}
+
+.recenter:hover {
+  background: #f1f4f8;
+}
+
+/* Reach-overlay refetch chip (013 R3). */
+.iso-chip {
+  position: absolute;
+  top: 16px;
+  right: 60px;
+  z-index: 10;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.zip-detail__estimating {
+  color: var(--muted);
+  font-style: italic;
+}
+
 /* Top movers (009 R6) */
 .movers {
   margin-top: 12px;

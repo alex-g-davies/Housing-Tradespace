@@ -57,6 +57,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ZipDetailPanel>[0]> = 
     stateCode: "WA",
     budget: 0,
     context: CONTEXT,
+    estimating: false,
     wiki: null as Parameters<typeof ZipDetailPanel>[0]["wiki"],
     onClose: vi.fn(),
     pinnedZip: null as string | null,
@@ -89,6 +90,11 @@ describe("ZipDetailPanel (009 R2/R9)", () => {
     renderPanel({ context: EMPTY_CONTEXT });
     expect(screen.queryByText(/Drive to work/)).toBeNull();
     expect(screen.queryByText(/Drive home/)).toBeNull();
+  });
+
+  it("shows the estimating line while the commute fetch is in flight (013 R3)", () => {
+    renderPanel({ context: EMPTY_CONTEXT, estimating: true });
+    expect(screen.getByText("Estimating commute…")).toBeInTheDocument();
   });
 
   it("shows budget fit when a budget is set", () => {

@@ -8,6 +8,7 @@ import {
   formatUsd,
   formatUsdCompact,
   placeLabel,
+  rangeLabel,
 } from "../lib/format";
 
 describe("format", () => {
@@ -41,6 +42,11 @@ describe("format", () => {
     expect(placeLabel("98335", "Gig Harbor", "WA")).toBe("Gig Harbor, WA 98335");
     expect(placeLabel("98335", "Gig Harbor")).toBe("Gig Harbor 98335");
     expect(placeLabel("98335", null, "WA")).toBe("ZIP 98335");
+  });
+
+  it("formats minute ranges, collapsing equal endpoints (013 R1)", () => {
+    expect(rangeLabel(55, 73)).toBe("55–73 min");
+    expect(rangeLabel(85, 85)).toBe("~85 min");
   });
 
   it("formats departure labels as weekday + 12h time (011)", () => {

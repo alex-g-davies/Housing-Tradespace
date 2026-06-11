@@ -5,10 +5,13 @@
 import {
   COMMUTE_STEPS,
   DEFAULT_MINUTES,
+  DEFAULT_MODE,
   DEFAULT_STATE,
   DEFAULT_WORK,
   METRICS,
+  TRAVEL_MODES,
   type MetricKey,
+  type TravelMode,
   type WorkLocation,
 } from "../config";
 
@@ -19,6 +22,7 @@ export interface UrlState {
   work?: WorkLocation;
   minutes?: number;
   metric?: MetricKey;
+  tmode?: TravelMode;
 }
 
 const METRIC_KEYS = new Set(METRICS.map((m) => m.key));
@@ -55,6 +59,9 @@ export function parseAppUrl(search: string): UrlState {
   const metric = params.get("metric");
   if (metric && METRIC_KEYS.has(metric as MetricKey)) out.metric = metric as MetricKey;
 
+  const tmode = params.get("tmode");
+  if (tmode && TRAVEL_MODES.some((m) => m.key === tmode)) out.tmode = tmode as TravelMode;
+
   return out;
 }
 
@@ -65,6 +72,7 @@ export interface AppUrlInput {
   work: WorkLocation;
   minutes: number;
   metric: MetricKey;
+  tmode: TravelMode;
 }
 
 /** Serialize to a query string ("?…" or "" when everything is default). */
@@ -79,6 +87,7 @@ export function serializeAppUrl(s: AppUrlInput): string {
   }
   if (s.minutes !== DEFAULT_MINUTES) params.set("min", String(s.minutes));
   if (s.metric !== METRICS[0].key) params.set("metric", s.metric);
+  if (s.tmode !== DEFAULT_MODE) params.set("tmode", s.tmode);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }

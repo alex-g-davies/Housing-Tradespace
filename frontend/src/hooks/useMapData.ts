@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import type { FeatureCollection } from "geojson";
 
 import { type ZipValue, getHousing, getIsochrone, getZipsGeojson } from "../api/client";
-import type { WorkLocation } from "../config";
+import type { TravelMode, WorkLocation } from "../config";
 
 export interface MapData {
   geojson: FeatureCollection | null;
   isochrone: FeatureCollection | null;
   records: Map<string, ZipValue>;
   loading: boolean;
+  /** True while the reach overlay is refetching (013 R3 — map chip). */
+  isoLoading: boolean;
   error: string | null;
   /** Non-blocking degradations to surface as toasts (005 R2). */
   notices: string[];
@@ -26,11 +28,17 @@ export const NOTICE_ISOCHRONE = "Commute layer unavailable — move the pin or r
  * layer; the records and isochrone are best-effort but their failures are
  * surfaced as notices instead of being silently swallowed.
  */
-export function useMapData(state: string, work: WorkLocation, minutes: number): MapData {
+export function useMapData(
+  state: string,
+  work: WorkLocation,
+  minutes: number,
+  mode: TravelMode,
+): MapData {
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
   const [isochrone, setIsochrone] = useState<FeatureCollection | null>(null);
   const [records, setRecords] = useState<Map<string, ZipValue>>(EMPTY);
   const [loading, setLoading] = useState(true);
+  const [isoLoading, setIsoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recordsFailed, setRecordsFailed] = useState(false);
   const [isoFailed, setIsoFailed] = useState(false);
@@ -63,24 +71,26 @@ export function useMapData(state: string, work: WorkLocation, minutes: number): 
     };
   }, [state]);
 
-  // Commute isochrone — refetched when the work location or commute time changes.
+  // Reach overlay — refetched when the work location, time, or mode changes.
   useEffect(() => {
     let cancelled = false;
-    getIsochrone(work.lat, work.lon, minutes)
+    setIsoLoading(true);
+    getIsochrone(work.lat, work.lon, minutes, mode)
       .then((fc) => {
         if (cancelled) return;
         setIsochrone(fc);
         setIsoFailed(false);
       })
-      .catch(() => !cancelled && setIsoFailed(true));
+      .catch(() => !cancelled && setIsoFailed(true))
+      .finally(() => !cancelled && setIsoLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [work.lat, work.lon, minutes]);
+  }, [work.lat, work.lon, minutes, mode]);
 
   const notices: string[] = [];
   if (recordsFailed) notices.push(NOTICE_RECORDS);
   if (isoFailed) notices.push(NOTICE_ISOCHRONE);
 
-  return { geojson, isochrone, records, loading, error, notices };
+  return { geojson, isochrone, records, loading, isoLoading, error, notices };
 }
