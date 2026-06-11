@@ -69,10 +69,21 @@ export const PPSF_STOPS: ColorStop[] = [
 // ZIPs with no value in the dataset.
 export const NO_DATA_COLOR = "#d9d9d9";
 
-// Ramp colors (sequential). Break VALUES are computed at runtime from each
-// region's distribution (quantiles) so a cheap state and a pricey state both
-// spread across the full ramp — a fixed nationwide scale would wash most out.
-export const VALUE_COLORS = COLOR_STOPS.map((s) => s.color);
+// Ramp colors (sequential). Break VALUES are computed at runtime as
+// equal-count buckets over each state's distribution, so a cheap state and a
+// pricey state both spread across the full ramp. Median value uses 8 tiers
+// (ColorBrewer Blues) — the top bucket is the state's top 12.5% of ZIPs,
+// giving the expensive end real gradation instead of one dark lump.
+export const VALUE_COLORS = [
+  "#deebf7",
+  "#c6dbef",
+  "#9ecae1",
+  "#6baed6",
+  "#4292c6",
+  "#2171b5",
+  "#08519c",
+  "#08306b",
+];
 export const PPSF_COLORS = PPSF_STOPS.map((s) => s.color);
 
 // The metrics the choropleth can shade by. `property` is the GeoJSON feature
