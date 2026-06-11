@@ -67,6 +67,8 @@ def test_merge_geojson_merges_scalar_metrics_and_excludes_history():
     assert by_zip["98101"]["median_value"] == 720000
     assert by_zip["98101"]["yoy_pct"] == 4.2
     assert by_zip["98101"]["ppsf"] == 612
+    assert by_zip["98101"]["price_to_income"] == 6.5  # 014 R1
+    assert "price_to_income" not in by_zip["98109"]  # no income -> omitted
     # History never goes into the GeoJSON (MapLibre stringifies nested props).
     assert "history" not in by_zip["98101"]
     # 98109 has no YoY -> property omitted (renders as 'no data' for that metric).

@@ -60,6 +60,7 @@ def test_zips_geojson_carries_scalar_metrics(client):
     assert "ZZZ" not in by_zip
     assert by_zip["98101"]["median_value"] == 720000
     assert by_zip["98101"]["yoy_pct"] == 4.2
+    assert by_zip["98101"]["price_to_income"] == 6.5  # served for the afford metric (014)
     assert "history" not in by_zip["98101"]  # not in GeoJSON
     assert "yoy_pct" not in by_zip["98109"]  # omitted -> 'no data' for that metric
     assert "median_value" not in by_zip["98115"]  # no-data ZIP

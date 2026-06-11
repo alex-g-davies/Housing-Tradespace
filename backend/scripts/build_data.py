@@ -369,7 +369,8 @@ def parse_zhvi_national(zhvi_csv: str) -> tuple[str, dict[str, list[dict]]]:
 
 # Scalar metrics merged into the choropleth GeoJSON (history is NOT — MapLibre
 # stringifies nested feature properties; the popup reads history from /api/housing).
-GEOJSON_METRICS = ("median_value", "yoy_pct", "ppsf")
+# Keep in sync with app/data_loader.py GEOJSON_METRICS (the runtime merge wins).
+GEOJSON_METRICS = ("median_value", "yoy_pct", "ppsf", "price_to_income")
 
 
 def build_geojson(geo_text: str, scalars: dict[str, dict], tolerance: float) -> dict:

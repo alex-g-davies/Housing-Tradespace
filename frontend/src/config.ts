@@ -71,25 +71,46 @@ export const NO_DATA_COLOR = "#d9d9d9";
 
 // Ramp colors (sequential). Break VALUES are computed at runtime as
 // equal-count buckets over each state's distribution, so a cheap state and a
-// pricey state both spread across the full ramp. Median value uses 8 tiers
-// (ColorBrewer Blues) — the top bucket is the state's top 12.5% of ZIPs,
-// giving the expensive end real gradation instead of one dark lump.
+// pricey state both spread across the full ramp; each 8-tier bucket holds the
+// state's ~12.5% of ZIPs. Multi-hue ramps (ColorBrewer) are deliberate: the
+// light ends are hue-separated from both the gray basemap and the gray
+// no-data fill, which single-hue light blues/purples were not (012-sprint
+// contrast fix).
 export const VALUE_COLORS = [
-  "#deebf7",
-  "#c6dbef",
-  "#9ecae1",
-  "#6baed6",
-  "#4292c6",
-  "#2171b5",
-  "#08519c",
-  "#08306b",
-];
-export const PPSF_COLORS = PPSF_STOPS.map((s) => s.color);
+  "#ffffd9",
+  "#edf8b1",
+  "#c7e9b4",
+  "#7fcdbb",
+  "#41b6c4",
+  "#1d91c0",
+  "#225ea8",
+  "#0c2c84",
+]; // YlGnBu
+export const PPSF_COLORS = [
+  "#fff7fb",
+  "#ece2f0",
+  "#d0d1e6",
+  "#a6bddb",
+  "#67a9cf",
+  "#3690c0",
+  "#02818a",
+  "#016450",
+]; // PuBuGn — distinct teal-green dark end vs the value ramp
+export const AFFORD_COLORS = [
+  "#ffffcc",
+  "#ffeda0",
+  "#fed976",
+  "#feb24c",
+  "#fd8d3c",
+  "#fc4e2a",
+  "#e31a1c",
+  "#b10026",
+]; // YlOrRd — darker = higher price-to-income = less affordable
 
 // The metrics the choropleth can shade by. `property` is the GeoJSON feature
 // property; `fixedStops` (YoY only — a comparable % scale) overrides the
 // per-region quantile breaks. `format` labels legend boundaries.
-export type MetricKey = "value" | "yoy" | "ppsf";
+export type MetricKey = "value" | "yoy" | "ppsf" | "afford";
 
 export interface MetricDef {
   key: MetricKey;
@@ -131,11 +152,20 @@ export const METRICS: MetricDef[] = [
     diverging: false,
     format: formatPpsf,
   },
+  {
+    key: "afford",
+    label: "Affordability (price ÷ income)",
+    short: "Afford.",
+    property: "price_to_income",
+    colors: AFFORD_COLORS,
+    diverging: false,
+    format: (v: number) => `${v.toFixed(1)}×`,
+  },
 ];
 
 // Opacity applied to over-budget ZIPs vs. in-budget ZIPs (R4 de-emphasis).
 export const OVER_BUDGET_OPACITY = 0.15;
-export const IN_BUDGET_OPACITY = 0.85;
+export const IN_BUDGET_OPACITY = 0.9;
 
 // Selectable commute times (min). Mapbox isochrones cap at 60.
 export const COMMUTE_STEPS = [15, 30, 45, 60] as const;

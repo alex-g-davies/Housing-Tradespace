@@ -52,6 +52,11 @@ describe("urlState (009 R5)", () => {
     expect(parseAppUrl("?state=co").state).toBe("CO");
   });
 
+  it("round-trips the affordability metric (014 R3)", () => {
+    expect(parseAppUrl("?metric=afford").metric).toBe("afford");
+    expect(serializeAppUrl({ ...DEFAULTS, metric: "afford" })).toBe("?metric=afford");
+  });
+
   it("keeps leading-zero ZIPs", () => {
     expect(parseAppUrl("?zip=05001").zip).toBe("05001");
   });

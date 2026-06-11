@@ -164,7 +164,12 @@ def parse_housing(raw: dict[str, Any]) -> ParsedHousing:
 # Scalar metrics merged into the choropleth GeoJSON for data-driven shading.
 # History is intentionally excluded — MapLibre stringifies nested feature
 # properties, so the popup reads history from /api/housing instead.
-GEOJSON_METRICS = ("median_value", "yoy_pct", "ppsf")
+GEOJSON_METRICS = ("median_value", "yoy_pct", "ppsf", "price_to_income")
+
+# The served geojson bytes depend on GEOJSON_METRICS as well as the source
+# files, so the ETag must change when this list does — otherwise browsers
+# holding the old shape revalidate into 304s forever (spec 014 R2).
+_ETAG_SCHEMA_SALT = ("metrics:" + ",".join(GEOJSON_METRICS)).encode("utf-8")
 
 
 def merge_geojson(geojson_raw: dict[str, Any], records: dict[str, ZipRecord]) -> dict[str, Any]:
@@ -220,7 +225,7 @@ class DataStore:
         except (OSError, ValueError) as exc:
             logger.error("DataStore[%s]: failed to load data files: %s", state, exc)
             raise DataLoadError(f"data unavailable for state {state!r}") from exc
-        version = hashlib.sha256(zhvi_bytes + geo_bytes).hexdigest()[:16]
+        version = hashlib.sha256(zhvi_bytes + geo_bytes + _ETAG_SCHEMA_SALT).hexdigest()[:16]
         logger.info(
             "DataStore[%s]: %d ZIP records, %d geojson features",
             state,
