@@ -831,4 +831,47 @@ body,
   .hint ~ .status {
     top: 64px;
   }
+
+  /* ZIP detail (009 R8): full-width bottom sheet ABOVE the controls sheet
+     while open — selecting a ZIP is a focused moment; close returns to the
+     controls. */
+  .zip-detail {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 60vh;
+    z-index: 13;
+    border-radius: 14px 14px 0 0;
+    border-bottom: none;
+    padding-top: 8px;
+    animation: zip-sheet-in 200ms ease-out;
+  }
+
+  .zip-detail::before {
+    content: "";
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 0 auto 8px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+
+  .zip-detail__close {
+    font-size: 24px;
+    padding: 4px 10px;
+  }
+}
+
+@keyframes zip-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
