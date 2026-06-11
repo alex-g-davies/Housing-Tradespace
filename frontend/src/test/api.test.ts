@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getGeocode, getHousing, getIsochrone, getZipsGeojson } from "../api/client";
+import { getCommute, getGeocode, getHousing, getIsochrone, getZipsGeojson } from "../api/client";
 
 function mockFetch() {
   const fetchMock = vi.fn(async () => ({
@@ -24,6 +24,7 @@ describe("api client (R5 — token never client-side)", () => {
     await getIsochrone(47.518, -122.2966, 30);
     await getGeocode("Pike Place Market");
     await getGeocode("Main St", { lat: 31.2, lon: -99.3 });
+    await getCommute({ lat: 47.33, lon: -122.58 }, { lat: 47.518, lon: -122.2966 });
     const urls = f.mock.calls.map((c) => String(c[0]));
     expect(urls[0]).toBe("/api/housing?state=WA");
     expect(urls[1]).toBe("/api/zips.geojson?state=WA");
@@ -33,6 +34,10 @@ describe("api client (R5 — token never client-side)", () => {
     // proximity bias (010 R3) carries only region-center coordinates.
     expect(urls[3]).toBe("/api/geocode?q=Pike%20Place%20Market");
     expect(urls[4]).toBe("/api/geocode?q=Main%20St&proximity_lat=31.2&proximity_lon=-99.3");
+    // Commute estimate (011): coordinate pairs only, never a token.
+    expect(urls[5]).toBe(
+      "/api/commute?from_lat=47.33&from_lon=-122.58&to_lat=47.518&to_lon=-122.2966",
+    );
     for (const url of urls) {
       expect(url).not.toContain("mapbox");
       expect(url).not.toContain("access_token");

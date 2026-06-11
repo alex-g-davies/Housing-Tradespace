@@ -767,6 +767,10 @@ body,
   margin: 4px 0;
 }
 
+.zip-detail__drive {
+  font-variant-numeric: tabular-nums;
+}
+
 .zip-detail__pin {
   display: block;
   width: 100%;

@@ -55,7 +55,9 @@ export default function CommuteControl({ minutes, onMinutesChange, variation }: 
             Traffic variation unavailable (showing a typical contour).
           </p>
         )}
-        <p className="commute__note">Drive time leaving your workplace.</p>
+        <p className="commute__note">
+          Typical traffic for each hour, leaving your workplace — bad days run longer.
+        </p>
       </details>
     </div>
   );

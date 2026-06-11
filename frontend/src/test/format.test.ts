@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPct, formatPpsf, formatSqMi, formatUsd, formatUsdCompact } from "../lib/format";
+import {
+  departLabel,
+  formatPct,
+  formatPpsf,
+  formatSqMi,
+  formatUsd,
+  formatUsdCompact,
+} from "../lib/format";
 
 describe("format", () => {
   it("formats full currency with thousands separators", () => {
@@ -27,5 +34,11 @@ describe("format", () => {
   it("formats area in square miles, with a dash for null", () => {
     expect(formatSqMi(467.8)).toBe("468 mi²");
     expect(formatSqMi(null)).toBe("—");
+  });
+
+  it("formats departure labels as weekday + 12h time (011)", () => {
+    expect(departLabel("2026-06-15T08:00")).toBe("Mon 8:00 AM");
+    expect(departLabel("2026-06-15T17:30")).toBe("Mon 5:30 PM");
+    expect(departLabel("not-a-date")).toBe("");
   });
 });

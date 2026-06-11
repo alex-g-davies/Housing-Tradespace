@@ -56,6 +56,21 @@ export interface GeocodeResult {
   place_name: string;
 }
 
+/** Routed AM/PM commute estimate for a (home, work) pair (spec 011). */
+export interface CommuteEstimate {
+  am_minutes: number;
+  am_depart_local: string;
+  pm_minutes: number;
+  pm_depart_local: string;
+}
+
+/** Routed drive times home->work (AM) and work->home (PM). Throws on any
+ * non-OK status — callers treat failures as "no estimate" (best-effort). */
+export const getCommute = (from: { lat: number; lon: number }, to: { lat: number; lon: number }) =>
+  getJson<CommuteEstimate>(
+    `/commute?from_lat=${from.lat}&from_lon=${from.lon}&to_lat=${to.lat}&to_lon=${to.lon}`,
+  );
+
 /** Reach-area variation across departure scenarios (spec 003). */
 export interface CommuteVariation {
   offpeak_sqmi: number | null;

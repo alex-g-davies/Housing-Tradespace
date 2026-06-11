@@ -10,6 +10,9 @@ export interface ZipContext {
   vsStateMedianPct: number | null;
   /** Human-readable commute-reach line, or null when no isochrone is loaded. */
   commuteReach: string | null;
+  /** Routed drive-time lines (011 R3); null while loading or unavailable. */
+  driveToWork: string | null;
+  driveHome: string | null;
 }
 
 interface Props {
@@ -195,6 +198,16 @@ export default function ZipDetailPanel({
           <PriceChart history={record?.history ?? null} />
 
           <div className="zip-detail__context">
+            {context.driveToWork && (
+              <p className="zip-detail__drive">
+                <strong>{context.driveToWork}</strong>
+              </p>
+            )}
+            {context.driveHome && (
+              <p className="zip-detail__drive">
+                <strong>{context.driveHome}</strong>
+              </p>
+            )}
             {context.percentile != null && (
               <p>
                 Pricier than <strong>{context.percentile}%</strong> of {metroLabel} ZIPs

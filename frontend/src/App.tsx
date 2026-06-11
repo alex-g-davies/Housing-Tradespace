@@ -15,9 +15,11 @@ import {
   SCENARIO_STYLES,
   type WorkLocation,
 } from "./config";
+import { useCommute } from "./hooks/useCommute";
 import { useGeolocate } from "./hooks/useGeolocate";
 import { useMapData } from "./hooks/useMapData";
 import { metricValuesFromFeatures, resolveStops } from "./lib/colorScale";
+import { departLabel } from "./lib/format";
 import { centroidsByZip, scenariosContaining } from "./lib/geo";
 import { regionForPoint } from "./lib/locateRegion";
 import { parseAppUrl, serializeAppUrl } from "./lib/urlState";
@@ -98,9 +100,21 @@ export default function App() {
   // One centroid per ZIP (009): commute-reach check now, fly-to targets later.
   const centroids = useMemo(() => centroidsByZip(geojson), [geojson]);
 
+  // Routed AM/PM drive times for the selected ZIP (011 R2/R3) — best-effort.
+  const commute = useCommute(
+    selectedZip ? (centroids.get(selectedZip) ?? null) : null,
+    work,
+  );
+
   // Context block for the detail panel — pure computations over loaded data.
   const zipContext = useMemo<ZipContext>(() => {
-    const empty: ZipContext = { percentile: null, vsStateMedianPct: null, commuteReach: null };
+    const empty: ZipContext = {
+      percentile: null,
+      vsStateMedianPct: null,
+      commuteReach: null,
+      driveToWork: null,
+      driveHome: null,
+    };
     if (!selectedZip) return empty;
     const record = records.get(selectedZip);
     const values = [...records.values()].map((r) => r.median_value);
@@ -117,11 +131,21 @@ export default function App() {
       // containing the ZIP center is the strongest guarantee.
       const best = [...SCENARIO_STYLES].reverse().find((s) => contained.has(s.key));
       commuteReach = best
-        ? `Within a ${minutes}-min drive of work (${best.label.toLowerCase()}) — approximate`
-        : `Beyond a ${minutes}-min drive of work — approximate`;
+        ? `Within a ${minutes}-min drive of work in typical ${best.label.toLowerCase()} — bad days run longer`
+        : `Beyond a ${minutes}-min drive of work in typical traffic`;
     }
-    return { percentile, vsStateMedianPct, commuteReach };
-  }, [selectedZip, records, centroids, isochrone, minutes]);
+    return {
+      percentile,
+      vsStateMedianPct,
+      commuteReach,
+      driveToWork: commute
+        ? `Drive to work: ~${commute.am_minutes} min (${departLabel(commute.am_depart_local)})`
+        : null,
+      driveHome: commute
+        ? `Drive home: ~${commute.pm_minutes} min (${departLabel(commute.pm_depart_local)})`
+        : null,
+    };
+  }, [selectedZip, records, centroids, isochrone, minutes, commute]);
 
   // Esc closes the detail panel (009 R1).
   useEffect(() => {

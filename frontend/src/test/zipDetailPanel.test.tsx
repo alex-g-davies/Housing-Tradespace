@@ -34,13 +34,17 @@ const OTHER: ZipValue = {
 const CONTEXT: ZipContext = {
   percentile: 82,
   vsStateMedianPct: 31.4,
-  commuteReach: "Within a 30-min drive of work (midday) — approximate",
+  commuteReach: "Within a 30-min drive of work in typical midday — bad days run longer",
+  driveToWork: "Drive to work: ~52 min (Mon 8:00 AM)",
+  driveHome: "Drive home: ~64 min (Mon 5:30 PM)",
 };
 
 const EMPTY_CONTEXT: ZipContext = {
   percentile: null,
   vsStateMedianPct: null,
   commuteReach: null,
+  driveToWork: null,
+  driveHome: null,
 };
 
 function renderPanel(overrides: Partial<Parameters<typeof ZipDetailPanel>[0]> = {}) {
@@ -72,7 +76,15 @@ describe("ZipDetailPanel (009 R2/R9)", () => {
     expect(screen.getByText("8.4×")).toBeInTheDocument();
     expect(screen.getByText("82%")).toBeInTheDocument();
     expect(screen.getByText(/Within a 30-min drive/)).toBeInTheDocument();
+    expect(screen.getByText(/Drive to work: ~52 min/)).toBeInTheDocument();
+    expect(screen.getByText(/Drive home: ~64 min/)).toBeInTheDocument();
     expect(screen.getByRole("img")).toBeInTheDocument(); // price chart
+  });
+
+  it("omits the routed drive lines when no estimate exists (011 R6)", () => {
+    renderPanel({ context: EMPTY_CONTEXT });
+    expect(screen.queryByText(/Drive to work/)).toBeNull();
+    expect(screen.queryByText(/Drive home/)).toBeNull();
   });
 
   it("shows budget fit when a budget is set", () => {

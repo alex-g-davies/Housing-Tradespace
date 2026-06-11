@@ -38,3 +38,15 @@ export function formatCount(value: number | null | undefined): string {
 export function formatRatio(value: number | null | undefined): string {
   return value == null ? "—" : `${value.toFixed(1)}×`;
 }
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Naive local departure timestamp -> "Mon 8:00 AM"; bad input -> "". */
+export function departLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const hours = d.getHours();
+  const h12 = hours % 12 || 12;
+  const mins = String(d.getMinutes()).padStart(2, "0");
+  return `${WEEKDAYS[d.getDay()]} ${h12}:${mins} ${hours >= 12 ? "PM" : "AM"}`;
+}
