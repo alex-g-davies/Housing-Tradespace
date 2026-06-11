@@ -1,0 +1,88 @@
+# Spec 013 — Commute Depth 2: Departure Ranges, Travel Modes, Feedback
+
+Status: Draft
+Owner: <you>
+Related: 011-commute-accuracy (supersedes its R2 single-sample and R5
+two-call numbers), 003-commute-depth (band machinery), 004 (hardening reused)
+
+## Overview
+
+Three upgrades to how commutes are estimated and experienced. First, drive
+estimates sample the rush window (three departures per direction) and report
+an honest **range** — "Drive home: 55–73 min" — instead of one typical-point
+number. Second, a travel-mode switcher adds **walking and cycling** (same
+Mapbox APIs, different profile; public transit is explicitly out of scope —
+Mapbox has no transit product, and real transit means a new provider or
+self-hosted OpenTripPlanner, deferred to a future spec). Third, the UI
+finally *shows* when commute data is in flight, and a recenter button brings
+the map back to the work pin.
+
+## Requirements
+
+- **R1 — Departure-window sampling (drive).** Drive-mode `/api/commute`
+  samples three departures per leg (AM home→work 7:15/8:00/8:45; PM
+  work→home 4:30/5:15/6:00 origin-local, next weekday) and returns per-leg
+  min/max minutes plus the window labels. An uncached drive pair reserves
+  **6** budget calls (supersedes 011 R5's 2). A leg is valid when ≥1 sample
+  succeeds; the pair is a 404 (cached) when either leg has no valid sample.
+- **R2 — Travel modes.** `mode=drive|walk|cycle` on both `/api/isochrone`
+  and `/api/commute` (default drive, invalid → 422). Walk/cycle use the
+  `walking`/`cycling` profiles with no `depart_at` (durations are
+  time-invariant): isochrone fetches ONE contour (no traffic bands, no
+  variation summary, reserves 1), commute fetches one call per direction
+  (reserves 2) returning min==max and null windows. Cache keys include mode.
+- **R3 — Loading feedback.** While a commute estimate is in flight the
+  detail panel shows a muted "Estimating commute…" line; while the reach
+  overlay is refetching (pin drag, mode/minutes change) a small map chip
+  shows "Updating reach…". Both disappear on settle; failures stay silent
+  per 011 R6.
+- **R4 — Recenter on pin.** A floating, keyboard-accessible map button
+  (≥40 px) flies the map back to the work pin, reusing the existing
+  recenter flow.
+- **R5 — Mode in shared URLs.** `tmode=walk|cycle` round-trips through the
+  query string (omitted for the drive default), composing with 009 R5.
+- **R6 — Wire-format break is contained.** `CommuteEstimate` is restructured
+  (mode + per-leg min/max/window fields). The only consumer is this repo's
+  own frontend, deployed atomically with the backend; in-process caches
+  reset on deploy. No external-compat shim.
+
+## Non-functional / Constraints
+
+- All 004 hardening unchanged: rate limit, geofence, snapping, daily budget,
+  24 h caches. Worst-case daily uncached drive pairs drop 3× (6 calls vs 2)
+  — still ample under `MAPBOX_DAILY_CALL_BUDGET=2000` and the 100k/month
+  free tier.
+- Six sequential upstream calls ≈ ~2 s worst-typical — acceptable for a
+  debounced, now-visibly-loading best-effort line.
+- Mapbox's 60-minute isochrone cap applies to all profiles.
+
+## Acceptance Criteria
+
+- [ ] Drive mode: panel shows "Drive to work: A–B min" / "Drive home: C–D
+      min" with departure windows named; logs show 6 upstream calls per
+      fresh pair; re-selection spends 0.
+- [ ] Walk mode: single contour on the map (no scenario bands or fold),
+      "Walk to work: ~N min" with no window; 2 upstream calls per fresh
+      pair, 1 per fresh isochrone.
+- [ ] "Estimating commute…" appears immediately on selection and resolves;
+      "Updating reach…" appears during pin drags; neither lingers.
+- [ ] The recenter button flies back to the pin from anywhere; reachable by
+      keyboard with a visible focus ring.
+- [ ] `?tmode=walk` deep link opens in walk mode; drive URLs stay clean.
+- [ ] `pytest` and `npm run test` green across the new sampling, mode,
+      loading, and URL tests.
+
+## Out of Scope (explicit)
+
+- **Public transit** (no Mapbox product; future spec would weigh TravelTime/
+  Google-class providers — new billing + key handling — against self-hosted
+  OpenTripPlanner + GTFS infrastructure).
+- Pessimistic/percentile traffic (unchanged from 011); user-chosen departure
+  times; parallelized upstream fan-out (revisit only if latency feels bad).
+
+## Verification notes
+
+R1 → mocked-distinct-durations tests + live Tukwila→Gig Harbor range check;
+R2 → URL/profile assertions + live walk contour; R3/R4/R5 → component tests
++ manual walk. The human verifies; the implementing agent does not
+self-certify done.

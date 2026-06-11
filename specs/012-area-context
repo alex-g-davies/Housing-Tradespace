@@ -1,0 +1,79 @@
+# Spec 012 — Area Context: Place Names, Wikipedia Summaries, About & Data
+
+Status: Draft
+Owner: <you>
+Related: 002-data-enrichment (record-field pattern), 008-acs-enrichment
+(in-place enrich pattern), 009-zip-explorer (the panel these feed)
+
+## Overview
+
+ZIP codes are precise but opaque — "98335" means nothing to most visitors,
+while "Gig Harbor, WA 98335" orients instantly. This spec attaches a primary
+place name to every ZIP (GeoNames postal data), surfaces it everywhere ZIPs
+appear, layers a Wikipedia summary of the place into the detail panel, and
+adds an About & Data popover that houses the attribution obligations these
+sources carry (plus those we already owed).
+
+## Requirements
+
+- **R1 — Place names in the data.** Each ZIP record may carry `name` (the
+  GeoNames primary place name). A `--enrich-names` build mode rewrites the
+  existing `{ST}.zhvi.json` files in place (008 R7 pattern — geometry and
+  regions untouched) from the GeoNames US postal file; full builds apply it
+  too. One ZIP → multiple places resolves to GeoNames' primary (first) row.
+- **R2 — Names in the UI.** Hover popup, detail-panel title, top-movers rows,
+  and compare headers show "Place, ST 98335"-style labels via one shared
+  formatter; a missing name degrades to "ZIP 98335" everywhere.
+- **R3 — Wikipedia summary.** Selecting a ZIP (single view) shows the
+  place's Wikipedia extract and thumbnail, fetched client-direct from the
+  Wikipedia REST summary endpoint, trying "{Place}, {State}" then "{Place}";
+  only `type: "standard"` pages are accepted (404s and disambiguation pages
+  are skipped). The section is simply absent when nothing suitable exists.
+- **R4 — Attribution.** The wiki section always carries a "From Wikipedia
+  (CC BY-SA)" link to the source page. GeoNames (CC BY 4.0) and Wikipedia
+  are credited in the README and the About popover.
+- **R5 — About & Data popover.** An "ⓘ About & data" affordance in the
+  controls panel opens a dismissible overlay listing every data/tile/API
+  source with links — Zillow ZHVI, U.S. Census (ZCTA + ACS), Redfin,
+  GeoNames, Wikipedia, CARTO / © OpenStreetMap contributors, Mapbox — plus
+  an "estimates, not advice" disclaimer.
+- **R6 — Token safety unchanged.** Wikipedia is keyless and called from the
+  browser; 001-R5 (Mapbox token backend-only) is untouched. No new secrets.
+
+## Non-functional / Constraints
+
+- No new dependencies. GeoNames US.zip (~7 MB) is a build-time download,
+  never a runtime one; raw file not committed.
+- Client-direct Wikipedia is deliberate: no key to protect, CORS `*`, and
+  proxying it through the hardened API would entangle a free upstream with
+  the Mapbox budget machinery for no security gain. Browser HTTP cache + an
+  in-module memo bound the request volume (public anonymous limit is 200
+  req/s — orders of magnitude above our traffic).
+- `name` lives in records only; the choropleth GeoJSON stays scalar-lean.
+
+## Acceptance Criteria
+
+- [ ] After `--enrich-names`, 98335 carries "Gig Harbor"; geojson and
+      regions.json are byte-identical; only zhvi files changed.
+- [ ] Hover, panel title, top movers, and compare all show place names; a
+      ZIP with no GeoNames row shows "ZIP xxxxx" without error.
+- [ ] Selecting a well-known place shows extract + thumbnail + the CC BY-SA
+      attribution link; a tiny rural ZIP shows no wiki section and no
+      console errors; disambiguation pages never render.
+- [ ] The About popover lists all seven sources with working links and the
+      disclaimer; Esc and the close affordance dismiss it.
+- [ ] `pytest` and `npm run test` pass with the new parser, formatter,
+      wiki, and About tests.
+
+## Out of Scope (explicit)
+
+- Secondary place names per ZIP; neighborhood-level naming.
+- Wikipedia content beyond the summary extract (infoboxes, full articles).
+- Localization (English Wikipedia only).
+
+## Verification notes
+
+R1 → build run + file diff; R2 → component tests + visual; R3/R4 → mocked
+fetch tests + live selection of Gig Harbor and a rural ZIP; R5 → About test +
+click-through of every link. The human verifies; the implementing agent does
+not self-certify done.

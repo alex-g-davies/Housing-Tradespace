@@ -1,0 +1,59 @@
+# Spec 014 — Affordability as a Map Metric
+
+Status: Draft
+Owner: <you>
+Related: 009-zip-explorer (supersedes its explicit price-to-income-as-metric
+deferral), 008-acs-enrichment (the data), 004 (caching this must not break)
+
+## Overview
+
+Price ÷ household income — the classic affordability multiple — has existed
+per ZIP since spec 008 but only appears in the detail panel. This spec promotes
+it to a fourth map-shading metric ("Afford."), because "where can people like
+me actually afford" is the question the whole app exists to answer, and raw
+price alone conflates expensive-but-rich areas with genuinely out-of-reach
+ones.
+
+## Requirements
+
+- **R1 — Served in the choropleth.** `price_to_income` joins the scalar
+  metrics merged into the served GeoJSON (runtime merge from records — no
+  data regeneration). The committed-data build mirrors the metric list for
+  future full rebuilds.
+- **R2 — Cache correctness.** Because the served GeoJSON bytes change while
+  the source files do not, the GeoJSON ETag must incorporate a schema
+  version (salted hash) so returning browsers do not 304 onto the old shape.
+- **R3 — Metric switcher entry.** A fourth metric "Afford." shades by
+  price_to_income with per-state equal-count buckets on a distinct
+  sequential ramp (darker = higher multiple = less affordable, consistent
+  with the darker-is-pricier convention; not reversed), ratio-formatted
+  legend ("4.2× – 5.1×"), no-data ZIPs gray, and full URL round-tripping
+  (`metric=afford`).
+
+## Non-functional / Constraints
+
+- Purely additive: `urlState`, `MetricSwitcher`, `Legend`, and the
+  equal-count machinery all derive from the METRICS config.
+- Income data is ACS 5-year (household, pre-tax); the About panel's
+  disclaimer covers interpretation limits.
+
+## Acceptance Criteria
+
+- [ ] Switching to Afford. reshades the map with visibly distinct ramp and a
+      ratio-labeled legend; ZIPs lacking income data render as no-data gray.
+- [ ] A browser that had cached the old geojson revalidates and receives the
+      new shape (ETag changed via the schema salt).
+- [ ] `?metric=afford` deep links round-trip.
+- [ ] `pytest` (merge + ETag tests) and `npm run test` (switcher, urlState,
+      legend) pass.
+
+## Out of Scope (explicit)
+
+- Affordability modeling beyond the simple multiple (rates, taxes, DTI).
+- Reversed/diverging ramp treatments.
+
+## Verification notes
+
+R1/R2 → data_loader tests (property present; salt changes ETag); R3 → UI
+tests + visual sweep in a cheap and an expensive state. The human verifies;
+the implementing agent does not self-certify done.
