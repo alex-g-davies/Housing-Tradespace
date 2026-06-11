@@ -13,24 +13,22 @@ import logging
 import math
 import time
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import httpx
 from shapely.geometry import mapping, shape
 
-from . import usage
+from . import tzlookup, usage
 
 logger = logging.getLogger(__name__)
 
 ISO_URL = "https://api.mapbox.com/isochrone/v1/mapbox/{profile}/{lon},{lat}"
 
-# Representative weekday departure windows in the metro's local time, ordered
-# from largest reach (off-peak) to smallest (peak) so features render with the
-# peak band on top. (scenario, local hour, human label.)
-METRO_TZ = ZoneInfo("America/Los_Angeles")
-# Ordered outer (widest reach) -> inner (smallest). Hours chosen from measured
-# outbound reach: 12:00 midday baseline, 17:00 the genuine PM-rush low (leaving
-# the workplace), 20:00 light evening traffic. (scenario, local hour, label.)
+# Representative weekday departure windows in the WORK LOCATION's local time
+# (Mapbox reads naive depart_at as origin-local; the date math rolls on the
+# region's clock via tzlookup — spec 011 R1), ordered from largest reach
+# (off-peak) to smallest (peak) so features render with the peak band on top.
+# Hours chosen from measured outbound reach: 12:00 midday baseline, 17:00 the
+# genuine PM-rush low (leaving the workplace), 20:00 light evening traffic.
 SCENARIOS: tuple[tuple[str, int, str], ...] = (
     ("offpeak", 20, "Light traffic"),
     ("typical", 12, "Midday"),
@@ -110,10 +108,11 @@ def build_collection(
     }
 
 
-def next_departure(hour: int, now: datetime.datetime) -> str:
-    """Next future weekday (Mon-Fri) at `hour`:00 local time as ISO
-    'YYYY-MM-DDThh:mm' (Mapbox depart_at requires a future time)."""
-    cand = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+def next_departure(hour: int, now: datetime.datetime, minute: int = 0) -> str:
+    """Next future weekday (Mon-Fri) at `hour`:`minute` local time as ISO
+    'YYYY-MM-DDThh:mm' (naive — Mapbox interprets it as origin-local; it must
+    be in the future, hence rolling on the origin's clock, spec 011 R1)."""
+    cand = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if cand <= now:
         cand += datetime.timedelta(days=1)
     while cand.weekday() >= 5:  # Saturday/Sunday -> roll to Monday
@@ -221,7 +220,7 @@ def fetch_variation(
     if not usage.reserve(len(SCENARIOS), daily_budget):
         raise usage.UsageBudgetError("daily upstream budget exhausted")
 
-    now = now or datetime.datetime.now(METRO_TZ)
+    now = now or datetime.datetime.now(tzlookup.tz_for(lat, lon))
     logger.info("Fetching commute variation: %s min from work location", minutes)
 
     # Fetch the succeeding scenarios in outer->inner order.

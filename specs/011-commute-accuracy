@@ -1,0 +1,102 @@
+# Spec 011 — Commute-Data Accuracy: Routed Estimates, Local Time, Honest Framing
+
+Status: Draft
+Owner: <you>
+Related: 003-commute-depth (supersedes its Matrix-API deferral),
+004-backend-hardening (rate limit / budget / geofence reused),
+009-zip-explorer (the detail panel this feeds)
+
+## Overview
+
+Spot checks show the commute layer can materially understate real rush-hour
+drives (Tukwila→Gig Harbor reads as ≤60 min; reality is 60–120). Three causes:
+Mapbox isochrones model *typical* (median-ish) traffic and are least accurate
+at the 60-minute cap fringe; the panel's reach line judges a ZIP by its
+centroid against a generalized polygon; and the morning home→work direction —
+often the worst — is unmodeled (isochrones only radiate outward from work).
+Separately, departure dates are rolled on a hardcoded Pacific clock for all
+51 states. This spec adds true point-to-point routed estimates (Mapbox
+Directions API) per selected ZIP in both directions, fixes the timezone
+handling, and reframes all commute copy as typical-traffic estimates.
+
+## Context
+
+- Mapbox interprets a naive `depart_at` as local time at the ORIGIN, so the
+  scenario hours are already correct nationally. The `METRO_TZ` bug is about
+  date-rolling: an Eastern-time user between 5–8 PM local gets a `depart_at`
+  already in the past (undocumented upstream behavior), and weekday rolls can
+  pin wrong dates. AK/HI windows are larger.
+- The Directions API supports `depart_at` with `driving-traffic` (GA — unlike
+  the Matrix API, whose beta 422s forced spec 003 to defer per-ZIP times).
+  One routed call per direction; `routes[0].duration` is traffic-predicted.
+- All hardening from 004 applies unchanged: per-IP rate limit, daily upstream
+  budget, ~500 m snapping, coverage geofence, in-process TTL caches.
+
+## Requirements
+
+- **R1 — Local-time scenarios.** Isochrone departure dates are computed in
+  the work location's local timezone via a state→IANA map (region resolved by
+  containing bbox, ties by distance to center; longitude-derived fixed-offset
+  fallback off-coverage). `METRO_TZ` is removed. Split states use their
+  dominant zone (documented in the mapping: TX→Chicago, FL/MI/IN/KY→New_York,
+  ID→Boise, AZ→Phoenix, AK→Anchorage, HI→Honolulu, …).
+- **R2 — Point-to-point commute estimates.** `GET /api/commute` with
+  validated `from_lat/from_lon` (home) and `to_lat/to_lon` (work) returns
+  `am_minutes` (home→work, departing next weekday 08:00 home-local) and
+  `pm_minutes` (work→home, departing 17:30 work-local) from Mapbox Directions
+  `driving-traffic` + `depart_at`, plus the departure labels.
+- **R3 — Panel display.** Selecting a ZIP shows "Drive to work: ~52 min
+  (Mon 8:00 AM)" and "Drive home: ~64 min (Mon 5:30 PM)" leading the detail
+  panel's context block; the band-membership line follows, reworded.
+- **R4 — Honest framing.** Commute copy everywhere says *typical* traffic;
+  the band line adds "bad days run longer"; routed estimates name their
+  departure time.
+- **R5 — Safety preserved.** Token server-side only, never in responses,
+  errors, or logs (001 R5). Each uncached estimate reserves 2 upstream calls
+  via the daily budget (004 R3); the endpoint is rate-limited (004 R1); both
+  endpoints geofenced to covered regions; both coordinates snapped to the
+  500 m grid before cache key and upstream call; results (including
+  no-route) cached 24 h; a ~250 mi straight-line guard rejects non-commute
+  pairs with 422.
+- **R6 — Graceful degradation.** Missing token, exhausted budget, or
+  upstream failure → 503; no drivable route → 404. The frontend treats all
+  of these as "no estimate lines" (best-effort, no toast); the rest of the
+  panel is unaffected. No fixture mode for this endpoint.
+
+## Non-functional / Constraints
+
+- No new dependencies (zoneinfo + tzdata are already shipped).
+- Cost: 2 Directions calls per uncached (ZIP, work) pair — bounded by the
+  existing `MAPBOX_DAILY_CALL_BUDGET` and well inside the 100k/month free
+  tier at current traffic.
+- Frontend fetch is debounced so pin-dragging with an open panel cannot
+  burst-spend the rate limit.
+
+## Acceptance Criteria
+
+- [ ] With a live token, work pin near Tukwila + a Gig Harbor ZIP selected:
+      the routed AM/PM numbers land in the realistic 60–120 min range — no
+      longer implied to be ≤60 by band membership alone.
+- [ ] A work pin in the Eastern time zone produces `depart_at` dates that
+      are in the future in Eastern time, evening requests included.
+- [ ] Two ZIP centroids <500 m apart produce one upstream pair (snap+cache);
+      re-selecting the same ZIP spends nothing.
+- [ ] Budget exhausted / token absent / no route degrade exactly per R6 with
+      the token absent from every response and the browser Network tab.
+- [ ] All commute copy reads as typical-traffic estimates with departure
+      times named; the band line includes "bad days run longer".
+- [ ] `pytest` and `npm run test` pass with the new tz, commute, and panel
+      tests.
+
+## Out of Scope (explicit)
+
+- Percentile/pessimistic traffic (requires a different provider).
+- Reverse isochrones; transit/walk/cycle modes; user-chosen departure times.
+- Matrix-API whole-map per-ZIP coloring (call volume; remains deferred).
+
+## Verification notes
+
+R1 → tz unit tests + NYC-pin debug check; R2/R5/R6 → pytest with mocked
+Directions; R3/R4 → panel tests + visual; the Tukwila→Gig Harbor live check
+is the headline acceptance walk. The human verifies; the implementing agent
+does not self-certify done.
