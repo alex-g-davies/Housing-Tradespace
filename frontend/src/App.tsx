@@ -7,7 +7,6 @@ import Onboarding from "./components/Onboarding";
 import Toasts from "./components/Toasts";
 import ZipDetailPanel, { type ZipContext } from "./components/ZipDetailPanel";
 import {
-  type ColorStop,
   DEFAULT_MINUTES,
   DEFAULT_STATE,
   DEFAULT_WORK,
@@ -18,7 +17,7 @@ import {
 } from "./config";
 import { useGeolocate } from "./hooks/useGeolocate";
 import { useMapData } from "./hooks/useMapData";
-import { resolveStops } from "./lib/colorScale";
+import { metricValuesFromFeatures, resolveStops } from "./lib/colorScale";
 import { centroidsByZip, scenariosContaining } from "./lib/geo";
 import { regionForPoint } from "./lib/locateRegion";
 import { parseAppUrl, serializeAppUrl } from "./lib/urlState";
@@ -37,11 +36,6 @@ export default function App() {
   const [metricKey, setMetricKey] = useState<MetricKey>(INITIAL_URL.metric ?? "value");
   const [minutes, setMinutes] = useState<number>(INITIAL_URL.minutes ?? DEFAULT_MINUTES);
   const [work, setWork] = useState<WorkLocation>(INITIAL_URL.work ?? DEFAULT_WORK);
-  // Human-readable pin description (place name / "{State} center" / "Your
-  // location"); null = manually dragged ("Custom pin location"). Never coords.
-  const [workLabel, setWorkLabel] = useState<string | null>(
-    INITIAL_URL.work ? null : "Washington center",
-  );
   const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [stateCode, setStateCode] = useState<string>(INITIAL_URL.state ?? DEFAULT_STATE);
   // Bumped on programmatic work moves (address / reset) so the map flies there.
@@ -80,20 +74,22 @@ export default function App() {
 
   const region = regions.find((r) => r.code === stateCode) ?? null;
 
-  // Adaptive ramp: MapView reports breaks computed from the ZIPs currently in
-  // view (viewport-adaptive); until it does, fall back to the whole-region
-  // quantiles so the legend has something to show.
-  const recordStops = useMemo(() => {
-    const values = [...records.values()].map(
-      (r) => (r as unknown as Record<string, number | null>)[activeMetric.property] ?? null,
-    );
+  // Stable per-state ramp: equal-count buckets over the WHOLE state's
+  // distribution (each color ≈ the same number of ZIPs), shared by the map
+  // fill and the legend. Falls back to the geojson's own values while the
+  // records fetch is still in flight.
+  const stops = useMemo(() => {
+    const values =
+      records.size > 0
+        ? [...records.values()].map(
+            (r) => (r as unknown as Record<string, number | null>)[activeMetric.property] ?? null,
+          )
+        : metricValuesFromFeatures(
+            (geojson?.features ?? []) as { properties?: Record<string, unknown> | null }[],
+            activeMetric.property,
+          );
     return resolveStops(activeMetric, values);
-  }, [records, activeMetric]);
-  const [viewportStops, setViewportStops] = useState<ColorStop[] | null>(null);
-  useEffect(() => {
-    setViewportStops(null); // reset when the metric or region changes
-  }, [activeMetric, stateCode]);
-  const stops = viewportStops ?? recordStops;
+  }, [records, geojson, activeMetric]);
 
   const variation =
     (isochrone as { properties?: { variation?: CommuteVariation } } | null)?.properties
@@ -160,7 +156,6 @@ export default function App() {
     if (!r) return; // outside every region (e.g. abroad) -> keep the default
     setStateCode(r.code);
     setWork({ lat: geoFix.lat, lon: geoFix.lon });
-    setWorkLabel("Your location");
     // Same-state fixes don't change fitBbox, so fly to the pin explicitly;
     // cross-state fixes get the region fit (it runs after and wins).
     setRecenter((n) => n + 1);
@@ -195,25 +190,12 @@ export default function App() {
   const handleWorkDrag = useCallback((lat: number, lon: number) => {
     userTouchedRef.current = true;
     setWork({ lat, lon });
-    setWorkLabel(null); // dragged pins have no place name
   }, []);
-  const handleAddressLocated = useCallback((lat: number, lon: number, label: string) => {
+  const handleAddressLocated = useCallback((lat: number, lon: number) => {
     userTouchedRef.current = true;
     setWork({ lat, lon });
-    setWorkLabel(label);
     setRecenter((n) => n + 1);
   }, []);
-  const handleResetWork = useCallback(() => {
-    const r = regions.find((x) => x.code === stateCode);
-    if (r?.center) {
-      setWork({ lat: r.center[1], lon: r.center[0] });
-      setWorkLabel(`${r.name} center`);
-    } else {
-      setWork(DEFAULT_WORK);
-      setWorkLabel("Washington center");
-    }
-    setRecenter((n) => n + 1);
-  }, [regions, stateCode]);
 
   const handleStateChange = useCallback(
     (code: string) => {
@@ -222,10 +204,7 @@ export default function App() {
       setSelectedZip(null); // records are per-state; stale selections are meaningless
       setPinnedZip(null);
       const r = regions.find((x) => x.code === code);
-      if (r?.center) {
-        setWork({ lat: r.center[1], lon: r.center[0] });
-        setWorkLabel(`${r.name} center`);
-      }
+      if (r?.center) setWork({ lat: r.center[1], lon: r.center[0] });
     },
     [regions],
   );
@@ -238,7 +217,7 @@ export default function App() {
         isochrone={isochrone}
         records={records}
         activeMetric={activeMetric}
-        onViewportStops={setViewportStops}
+        stops={stops}
         budget={budget}
         work={work}
         onWorkChange={handleWorkDrag}
@@ -278,10 +257,7 @@ export default function App() {
         minutes={minutes}
         onMinutesChange={setMinutes}
         variation={variation}
-        workLabel={workLabel}
-        onResetWork={handleResetWork}
         onAddressLocated={handleAddressLocated}
-        metroLabel={region?.name ?? stateCode}
         searchProximity={region?.center ? { lat: region.center[1], lon: region.center[0] } : null}
         records={records}
         onZipChosen={selectZipAndFly}

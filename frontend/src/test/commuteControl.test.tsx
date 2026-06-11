@@ -16,16 +16,26 @@ describe("CommuteControl (003)", () => {
   it("renders a button per step and marks the active one", () => {
     render(<CommuteControl minutes={30} onMinutesChange={() => {}} variation={variation} />);
     for (const m of COMMUTE_STEPS) {
-      expect(screen.getByRole("button", { name: `${m} min` })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: `${m} minutes` })).toBeInTheDocument();
     }
-    expect(screen.getByRole("button", { name: "30 min" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "30 minutes" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("emits the chosen minutes", () => {
     const onChange = vi.fn();
     render(<CommuteControl minutes={30} onMinutesChange={onChange} variation={null} />);
-    fireEvent.click(screen.getByRole("button", { name: "45 min" }));
+    fireEvent.click(screen.getByRole("button", { name: "45 minutes" }));
     expect(onChange).toHaveBeenCalledWith(45);
+  });
+
+  it("starts with the traffic-scenarios fold expanded", () => {
+    const { container } = render(
+      <CommuteControl minutes={30} onMinutesChange={() => {}} variation={variation} />,
+    );
+    expect(container.querySelector("details")!.open).toBe(true);
   });
 
   it("shows the scenario legend with per-band areas and the shrink summary", () => {

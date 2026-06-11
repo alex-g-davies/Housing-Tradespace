@@ -12,7 +12,7 @@ interface Props {
 export default function CommuteControl({ minutes, onMinutesChange, variation }: Props) {
   return (
     <div className="commute">
-      <span className="section-label">Commute time</span>
+      <span className="section-label">Commute time (min)</span>
       <div className="switcher" role="group" aria-label="Commute time (minutes)">
         {COMMUTE_STEPS.map((m) => (
           <button
@@ -20,16 +20,17 @@ export default function CommuteControl({ minutes, onMinutesChange, variation }: 
             type="button"
             className={m === minutes ? "switcher__btn switcher__btn--active" : "switcher__btn"}
             aria-pressed={m === minutes}
+            aria-label={`${m} minutes`}
             onClick={() => onMinutesChange(m)}
           >
-            {m} min
+            {m}
           </button>
         ))}
       </div>
 
-      {/* Scenario detail folds away (010 R4) — the colored outlines on the
-          map carry the message; the breakdown is for the curious. */}
-      <details className="panel-fold">
+      {/* Scenario detail is collapsible but starts expanded — the numbers are
+          part of the product's value; folding is for small screens. */}
+      <details className="panel-fold" open>
         <summary>Traffic scenarios</summary>
         <ul className="scenarios">
           {SCENARIO_STYLES.map((s) => (

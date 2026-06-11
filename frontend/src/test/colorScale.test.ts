@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { COLOR_STOPS, NO_DATA_COLOR, YOY_STOPS } from "../config";
 import {
   colorForValue,
-  computeQuantileStops,
+  computeEqualCountStops,
   fillColorExpression,
   fillOpacityExpression,
   isOverBudget,
@@ -48,32 +48,44 @@ describe("isOverBudget (R4)", () => {
   });
 });
 
-describe("computeQuantileStops (national adaptive ramps)", () => {
+describe("computeEqualCountStops (per-state equal-count buckets)", () => {
   const colors = ["a", "b", "c", "d", "e"];
 
-  it("spreads breaks across the value distribution, ascending", () => {
-    const values = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
-    const stops = computeQuantileStops(values, colors);
-    expect(stops).toHaveLength(colors.length);
-    expect(stops[0].value).toBe(100); // min
-    for (let i = 1; i < stops.length; i++) expect(stops[i].value).toBeGreaterThan(stops[i - 1].value);
+  it("puts breaks at equal-count ranks so each bucket holds ~the same number", () => {
+    const values = Array.from({ length: 100 }, (_, i) => i + 1); // 1..100
+    const stops = computeEqualCountStops(values, colors);
+    // Buckets: [1,21) [21,41) [41,61) [61,81) [81,∞) — 20 values each.
+    expect(stops.map((s) => s.value)).toEqual([1, 21, 41, 61, 81]);
     expect(stops.map((s) => s.color)).toEqual(colors);
   });
 
+  it("equal counts hold even for a heavily skewed distribution", () => {
+    // 80 cheap ZIPs at ~100k, 20 expensive at ~1M — the old linear spread
+    // collapsed the cheap 80% into one shade; equal-count keeps them spread.
+    const values = [
+      ...Array.from({ length: 80 }, (_, i) => 100_000 + i * 100),
+      ...Array.from({ length: 20 }, (_, i) => 1_000_000 + i * 10_000),
+    ];
+    const stops = computeEqualCountStops(values, colors);
+    const buckets = colors.map(
+      (_, i) =>
+        values.filter(
+          (v) =>
+            v >= stops[i].value && (i === colors.length - 1 || v < stops[i + 1].value),
+        ).length,
+    );
+    for (const count of buckets) expect(count).toBe(20);
+  });
+
   it("keeps breaks strictly ascending even with heavy ties", () => {
-    const stops = computeQuantileStops([5, 5, 5, 5, 5], colors);
-    for (let i = 1; i < stops.length; i++) expect(stops[i].value).toBeGreaterThan(stops[i - 1].value);
+    const stops = computeEqualCountStops([5, 5, 5, 5, 5], colors);
+    for (let i = 1; i < stops.length; i++) {
+      expect(stops[i].value).toBeGreaterThan(stops[i - 1].value);
+    }
   });
 
   it("ignores null/NaN and falls back when empty", () => {
-    expect(computeQuantileStops([null, NaN, undefined], colors)).toHaveLength(colors.length);
-  });
-
-  it("puts the top break near the high end (≈95th pct), not clamped at the 80th", () => {
-    const values = Array.from({ length: 100 }, (_, i) => i + 1); // 1..100
-    const stops = computeQuantileStops(values, colors);
-    expect(stops[stops.length - 1].value).toBeGreaterThanOrEqual(90); // ~p95, not p80=80
-    expect(stops[0].value).toBeLessThanOrEqual(5); // ~p2
+    expect(computeEqualCountStops([null, NaN, undefined], colors)).toHaveLength(colors.length);
   });
 });
 
@@ -90,17 +102,19 @@ describe("metricValuesFromFeatures", () => {
 });
 
 describe("fillColorExpression (R2/002)", () => {
-  it("builds a no-data-guarded interpolate over the given property + stops", () => {
+  it("builds a no-data-guarded STEP expression (discrete buckets)", () => {
     const expr = fillColorExpression("yoy_pct", YOY_STOPS);
     expect(expr[0]).toBe("case");
     expect(expr[1]).toEqual(["has", "yoy_pct"]); // missing -> no-data
     expect(expr[3]).toBe(NO_DATA_COLOR);
-    const interpolate = expr[2] as unknown[];
-    expect(interpolate[0]).toBe("interpolate");
-    expect(interpolate[2]).toEqual(["get", "yoy_pct"]);
-    // first stop value + color follow the head
-    expect(interpolate).toContain(YOY_STOPS[0].value);
-    expect(interpolate).toContain(YOY_STOPS[0].color);
+    const step = expr[2] as unknown[];
+    expect(step[0]).toBe("step");
+    expect(step[1]).toEqual(["get", "yoy_pct"]);
+    expect(step[2]).toBe(YOY_STOPS[0].color); // base color below the 2nd break
+    // subsequent break/color pairs
+    expect(step).toContain(YOY_STOPS[1].value);
+    expect(step).toContain(YOY_STOPS[1].color);
+    expect(step).not.toContain(YOY_STOPS[0].value); // first break is implicit
   });
 
   it("targets the requested property (value vs ppsf)", () => {

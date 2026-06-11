@@ -4,18 +4,17 @@
 import { COLOR_STOPS, type ColorStop, type MetricDef, NO_DATA_COLOR } from "../config";
 
 /**
- * Quantile color stops for a distribution: `n` breaks at evenly spaced ranks
- * spanning [loQ, hiQ] (default 2nd–95th percentile), so the ramp covers the bulk
- * of the data with gradation at the top instead of clamping a 20% chunk to the
- * darkest color, and a lone outlier doesn't stretch the scale. Ties are nudged
- * to keep breaks strictly ascending (MapLibre interpolate needs increasing
- * inputs). Falls back to evenly-indexed breaks if data is degenerate.
+ * Equal-count color stops: break i is the value at rank i/n of the state's
+ * distribution, so each color bucket holds ~the same number of ZIPs. Paired
+ * with the stepped fill expression this guarantees every hue is well
+ * represented no matter how concentrated the market is — the fix for ramps
+ * where most of a metro collapsed into one or two shades. Ties are nudged to
+ * keep breaks strictly ascending (MapLibre step needs increasing inputs);
+ * degenerate data falls back to evenly-indexed breaks.
  */
-export function computeQuantileStops(
+export function computeEqualCountStops(
   values: (number | null | undefined)[],
   colors: string[],
-  loQ = 0.02,
-  hiQ = 0.95,
 ): ColorStop[] {
   const clean = values
     .filter((v): v is number => v != null && !Number.isNaN(v))
@@ -25,8 +24,7 @@ export function computeQuantileStops(
 
   const stops: ColorStop[] = [];
   for (let i = 0; i < n; i++) {
-    const q = n === 1 ? loQ : loQ + ((hiQ - loQ) * i) / (n - 1);
-    const idx = Math.min(clean.length - 1, Math.max(0, Math.round(q * (clean.length - 1))));
+    const idx = Math.min(clean.length - 1, Math.floor((i * clean.length) / n));
     let value = clean[idx];
     if (i > 0 && value <= stops[i - 1].value) value = stops[i - 1].value + 1;
     stops.push({ value, color: colors[i] });
@@ -47,9 +45,12 @@ export function metricValuesFromFeatures(
   return out;
 }
 
-/** Resolve the ramp stops for a metric: fixed (YoY) or per-region quantiles. */
-export function resolveStops(metric: MetricDef, values: (number | null | undefined)[]): ColorStop[] {
-  return metric.fixedStops ?? computeQuantileStops(values, metric.colors);
+/** Resolve the ramp stops for a metric: fixed (YoY) or per-state equal-count. */
+export function resolveStops(
+  metric: MetricDef,
+  values: (number | null | undefined)[],
+): ColorStop[] {
+  return metric.fixedStops ?? computeEqualCountStops(values, metric.colors);
 }
 
 /** Color for a median value, or the no-data color when value is missing. */
@@ -79,15 +80,16 @@ export function isOverBudget(
 
 /**
  * Build the MapLibre data-driven fill-color expression for a given metric
- * property + ramp. ZIPs lacking the property (omitted by the backend) fall
- * through to the no-data color.
+ * property + ramp. Discrete `step` buckets (not interpolation) so each legend
+ * color maps to exactly one bucket of ZIPs. ZIPs lacking the property
+ * (omitted by the backend) fall through to the no-data color.
  */
 export function fillColorExpression(property: string, stops: ColorStop[]): unknown[] {
-  const interpolate: unknown[] = ["interpolate", ["linear"], ["get", property]];
-  for (const stop of stops) {
-    interpolate.push(stop.value, stop.color);
+  const step: unknown[] = ["step", ["get", property], stops[0].color];
+  for (const stop of stops.slice(1)) {
+    step.push(stop.value, stop.color);
   }
-  return ["case", ["has", property], interpolate, NO_DATA_COLOR];
+  return ["case", ["has", property], step, NO_DATA_COLOR];
 }
 
 /**

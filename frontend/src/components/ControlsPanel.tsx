@@ -21,12 +21,7 @@ interface Props {
   minutes: number;
   onMinutesChange: (minutes: number) => void;
   variation: CommuteVariation | null;
-  /** Human-readable description of the work pin (place name, "{State} center",
-   * "Your location") — never raw coordinates (010 R2). */
-  workLabel: string | null;
-  onResetWork: () => void;
   onAddressLocated: (lat: number, lon: number, label: string) => void;
-  metroLabel: string;
   /** Bias point for address search — the selected region's center. */
   searchProximity: { lat: number; lon: number } | null;
   records: Map<string, ZipValue>;
@@ -47,10 +42,7 @@ export default function ControlsPanel({
   minutes,
   onMinutesChange,
   variation,
-  workLabel,
-  onResetWork,
   onAddressLocated,
-  metroLabel,
   searchProximity,
   records,
   onZipChosen,
@@ -58,7 +50,6 @@ export default function ControlsPanel({
   return (
     <div className="panel">
       <img src="/brand/logo.png" alt="tradespace" className="panel-logo" />
-      <p className="panel-subtitle">{metroLabel}</p>
 
       <div className="panel__section">
         {regions.length > 0 && (
@@ -70,10 +61,6 @@ export default function ControlsPanel({
       <div className="panel__section work">
         <span className="work__label">Work location</span>
         <AddressSearch onLocated={onAddressLocated} proximity={searchProximity} />
-        <span className="work__place">{workLabel ?? "Custom pin location"}</span>
-        <button type="button" className="work__reset" onClick={onResetWork}>
-          Reset to {metroLabel} center
-        </button>
         <span className="work__hint">Drag the pin to move it, or search an address</span>
       </div>
 

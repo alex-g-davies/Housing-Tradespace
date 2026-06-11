@@ -18,7 +18,7 @@ export default function TopMovers({ records, onZipChosen }: Props) {
   if (movers.gainers.length === 0) return null;
 
   return (
-    <details className="movers panel-fold">
+    <details className="movers panel-fold" open>
       <summary>Top movers (YoY)</summary>
       <div className="movers__tabs" role="group" aria-label="Top movers direction">
         {(["gainers", "losers"] as const).map((key) => (
