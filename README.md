@@ -1,17 +1,33 @@
 # tradespace
 
-Decide where you could live by overlaying **housing cost** and **commute time**.
-The MVP (spec [`specs/001-mvp`](specs/001-mvp)) renders a Seattle-metro map that
-shades each ZIP by median home value, de-emphasizes ZIPs over a budget, and
-overlays a drive-time isochrone from a work location you can move by dragging the
-pin (default: the Museum of Flight). Later specs add richer per-ZIP metrics and a
-metric switcher ([`002`](specs/002-data-enrichment)) and an adjustable commute
-time (15/30/45/60 min) with time-of-day reach variation
-([`003`](specs/003-commute-depth)). Specs 002–003 go beyond the original MVP scope.
+**Live at [tradespace-x5xj.onrender.com](https://tradespace-x5xj.onrender.com/)**
 
-The map is the product: a FastAPI backend serves preprocessed aggregate data and
-proxies the (token-bearing) Mapbox Isochrone call; a React + MapLibre frontend
-renders the two layers on a keyless basemap.
+Decide where you could live by overlaying **housing cost** and **commute
+time**, nationwide. The map shades every ZIP in a selected state by median
+home value (or YoY change, or $/sqft), de-emphasizes ZIPs over your budget,
+and overlays live traffic-aware drive-time contours from a work pin you can
+drag or set by address search. Clicking a ZIP opens a detail panel with a
+price-history chart, Census population/income and a price-to-income
+affordability multiple, state percentile context, and commute reach — pin one
+ZIP to compare it against another, jump around via the top YoY movers list,
+and share any view as a URL. First-time visitors are geolocated to their own
+state (with a clean fallback).
+
+Built spec-by-spec (see [`specs/`](specs/)): Seattle MVP
+([`001`](specs/001-mvp)) → metric enrichment ([`002`](specs/002-data-enrichment))
+→ commute depth ([`003`](specs/003-commute-depth)) → abuse-hardened backend
+([`004`](specs/004-backend-hardening)) → frontend resilience
+([`005`](specs/005-frontend-resilience)) → single-container deployment
+([`006`](specs/006-deployment)) → all 50 states + DC
+([`007`](specs/007-national-coverage)) → Census ACS enrichment
+([`008`](specs/008-acs-enrichment)) → ZIP explorer
+([`009`](specs/009-zip-explorer)) → national UX + branding
+([`010`](specs/010-ui-refresh-branding)).
+
+The map is the product: a FastAPI backend serves preprocessed aggregate data
+and proxies the (token-bearing) Mapbox calls; a React + MapLibre frontend
+renders the layers on a keyless basemap with stable, per-state **equal-count**
+color buckets (each legend color ≈ the same number of ZIPs).
 
 ## Prerequisites
 
@@ -19,8 +35,10 @@ renders the two layers on a keyless basemap.
   `C:\Users\Alex\AppData\Local\Programs\Python\Python313\python.exe` (not on PATH).
 - **Node.js 18+ / npm** — required to run the frontend (install from nodejs.org).
 - **Mapbox token** — *optional*. Without one, the isochrone overlay is served
-  from a committed fixture. With one, it's fetched live. The token is read only on
-  the backend and never reaches the browser (R5).
+  from a committed fixture and geocoding is disabled. With one, both are live.
+  The token is read only on the backend and never reaches the browser (R5).
+- **Census API key** — *optional*, only for rebuilding data with ACS fields
+  (free signup: https://api.census.gov/data/key_signup.html).
 
 ## Backend (`backend/`)
 
@@ -38,20 +56,24 @@ cd backend
 .\.venv\Scripts\python.exe -m ruff check . ; .\.venv\Scripts\python.exe -m ruff format .
 ```
 
-Endpoints:
+Endpoints (rate-limited per IP; data responses carry strong ETags + gzip):
 
-| Method/Path           | Purpose                                                        |
-| --------------------- | ------------------------------------------------------------- |
-| `GET /api/health`     | Liveness check.                                               |
-| `GET /api/housing`    | Per-ZIP median home values (R1).                              |
-| `GET /api/zips.geojson` | ZIP polygons with `median_value` merged in (R2).            |
-| `GET /api/isochrone`  | 30-min driving contour — fixture or live Mapbox (R3/R5).      |
+| Method/Path             | Purpose                                                       |
+| ----------------------- | ------------------------------------------------------------- |
+| `GET /api/health`       | Probe: verifies the region index + one state store load.      |
+| `GET /api/regions`      | Selectable states with bounds/centers for the picker.         |
+| `GET /api/housing`      | Per-ZIP metrics: value, YoY, CAGR, $/sqft, history, ACS.      |
+| `GET /api/zips.geojson` | ZIP polygons with scalar metrics merged in.                   |
+| `GET /api/isochrone`    | 15/30/45/60-min traffic-aware bands — fixture or live Mapbox. |
+| `GET /api/geocode`      | Address search, biased to the selected region's center.       |
 
 ### Configuration
 
-Copy `backend/.env.example` to `backend/.env` and set values. `.env` is gitignored.
-With `MAPBOX_TOKEN` blank, `/api/isochrone` serves `data/isochrone_fixture.json`;
-set the token (and `WORK_LAT`/`WORK_LON`) to fetch a live, road-bounded contour.
+Copy `backend/.env.example` to `backend/.env` and set values (`.env` is
+gitignored). Highlights: `MAPBOX_TOKEN` (blank = fixture mode),
+`MAPBOX_DAILY_CALL_BUDGET` (hard daily cap on upstream Mapbox calls),
+`RATE_LIMIT_UPSTREAM`/`RATE_LIMIT_DATA`, `LOG_FORMAT=json` for cloud logs,
+and `CENSUS_API_KEY` (data builds only).
 
 ## Frontend (`frontend/`)
 
@@ -64,27 +86,32 @@ npm run build
 ```
 
 Run the backend first so the frontend's `/api` proxy has something to talk to.
+Brand assets live in `frontend/public/brand/` — the committed files are
+optimized derivatives; the large source masters stay local (gitignored).
 
 ## Data
 
-The app is **national, region-on-demand**: pick a state and only that state's ZIPs
-load. `backend/scripts/build_data.py` processes the national ZHVI (grouped by
-state), joins each state's value→geometry on a 5-char ZIP, simplifies, and writes
-`backend/data/states/{ST}.geojson` + `{ST}.zhvi.json` plus a `regions.json` index
-(name/bbox/center/count for the picker). Per ZIP it derives (spec 002): **YoY %**,
-**5-year CAGR**, a quarterly **price-history** series, plus optional **$/sqft**.
+The app is **national, region-on-demand**: all 50 states + DC are committed
+(~107 MB; largest state TX ≈ 6.6 MB) and only the selected state is fetched.
+`backend/scripts/build_data.py` processes the national ZHVI (grouped by
+state), joins each state's value→geometry on a 5-char ZIP, simplifies, and
+writes `backend/data/states/{ST}.geojson` + `{ST}.zhvi.json` plus a
+`regions.json` index. Per ZIP it derives: **YoY %**, **5-year CAGR**, a
+quarterly **price-history** series, **$/sqft** (Redfin), and **population /
+median household income / price-to-income** (Census ACS).
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe scripts\build_data.py --states WA,OR,CA   # just these (dev)
-.\.venv\Scripts\python.exe scripts\build_data.py                     # ALL states (~1 GB DL)
-.\.venv\Scripts\python.exe scripts\build_data.py --states WA --redfin-url  # + national $/sqft
+.\.venv\Scripts\python.exe scripts\build_data.py                  # full rebuild, ALL states (~1 GB DL)
+.\.venv\Scripts\python.exe scripts\build_data.py --states WA,OR   # subset (dev)
+.\.venv\Scripts\python.exe scripts\build_data.py --enrich-acs     # refresh ACS fields in place
+.\.venv\Scripts\python.exe scripts\build_data.py --enrich-redfin  # refresh $/sqft in place (big DL)
 ```
 
-The committed repo ships a few states (WA/OH/CA). Building **all ~51** produces
-~80–100 MB of geometry — track `backend/data/states/*.geojson` with **git-lfs** (or
-host them) if you commit the full set. Largest state (CA ~1,500 ZIPs ≈ 5 MB) still
-renders in ~1–2 s; only the selected state is fetched.
+The `--enrich-*` modes rewrite the existing `{ST}.zhvi.json` files without
+re-downloading ZHVI or geometry — use them for supplemental-data refreshes.
+A full rebuild does **not** include Redfin by default; run `--enrich-redfin`
+after one (this bit us once — see commit `bf9b205`).
 
 Sources (free / aggregate):
 
@@ -92,20 +119,19 @@ Sources (free / aggregate):
   (ZHVI is smoothed/seasonally adjusted and may **restate** prior months on
   re-download, so historical YoY/CAGR can shift slightly between builds.)
 - **ZCTA ZIP boundaries** — © U.S. Census Bureau (via the OpenDataDE mirror).
-- **Redfin** `zip_code_market_tracker` — `MEDIAN_PPSF` (median **sold** price per
-  square foot, All Residential) for `$/sqft`. © Redfin Data Center. **Optional**
-  and **large** (>4 GB uncompressed): off unless you pass
-  `--redfin-url`/`--redfin-path`; streamed in chunks and filtered to a tiny
-  committed file. Without it, $/sqft renders as "no data" and the app works
-  normally.
+- **Census ACS 5-Year Estimates** (ZCTA level) — population (B01003) and
+  median household income (B19013); requires a free `CENSUS_API_KEY`.
+  © U.S. Census Bureau.
+- **Redfin** `zip_code_market_tracker` — median **sold** $/sqft (All
+  Residential). © Redfin Data Center. Large (>4 GB uncompressed); streamed
+  and filtered.
 
-The committed `backend/data/isochrone_fixture.json` is a single drive-time polygon
-served only in **fixture mode** (no `MAPBOX_TOKEN`) as one "typical" band. With a
-token, `/api/isochrone` instead returns three live traffic-aware bands (off-peak /
-midday / rush hour) for the selected time, so the fixture is just an offline
-fallback — keep it a single Polygon feature.
+The committed `backend/data/isochrone_fixture.json` is a single drive-time
+polygon served only in **fixture mode** (no `MAPBOX_TOKEN`) as one "typical"
+band. With a token, `/api/isochrone` returns three live traffic-aware bands
+(off-peak / midday / rush hour) for the selected time.
 
-## Deployment (spec [`006`](specs/006-deployment))
+## Deployment (spec [`006`](specs/006-deployment)) — live on Render
 
 The app ships as **one container, one origin**: a multi-stage
 [`backend/Dockerfile`](backend/Dockerfile) builds the SPA and serves it from
@@ -113,7 +139,9 @@ the FastAPI app (`STATIC_DIR`), so production needs no CORS and the relative
 `/api` calls work unchanged. [`render.yaml`](render.yaml) deploys it to
 Render (Starter plan) with health checks and autodeploy from `main`;
 [CI](.github/workflows/ci.yml) gates every push with lint, tests, and a
-Docker smoke run in fixture mode.
+Docker smoke run in fixture mode. Production:
+**https://tradespace-x5xj.onrender.com** (`MAPBOX_TOKEN` lives only in the
+Render dashboard).
 
 ```powershell
 # Local production-image smoke test (from the repo root):
@@ -122,20 +150,13 @@ docker run --rm -p 8000:8000 -e MAPBOX_TOKEN=$env:MAPBOX_TOKEN tradespace
 # -> http://localhost:8000 serves the SPA; /api/* the API.
 ```
 
-First-time Render setup (manual, once):
-
-1. Push the repo to GitHub and create a **Blueprint** on Render pointing at it
-   (`render.yaml` is picked up automatically).
-2. Set `MAPBOX_TOKEN` in the Render dashboard (it is `sync: false` in the
-   blueprint — it never lives in the repo).
-3. Protect the `main` branch on GitHub (require the CI checks) so Render's
-   autodeploy only ever sees green commits.
-
-**Mapbox spend guardrails:** set a spending limit *and* a usage alert in the
-Mapbox dashboard. The production token needs no URL restriction (server-side
-calls send no Referer). The backend additionally enforces per-IP rate limits
-and a daily upstream-call budget (`MAPBOX_DAILY_CALL_BUDGET`, spec 004). If
-the token ever leaks, rotate it in Mapbox and update the Render env var.
+To reproduce the setup from scratch: create a Render **Blueprint** pointing
+at the repo (`render.yaml` is picked up automatically) and set `MAPBOX_TOKEN`
+in the dashboard. **Mapbox spend guardrails:** Mapbox offers no hard billing
+cap, so the backend's own protections are the real ceiling — per-IP rate
+limits, ~500 m isochrone-origin snapping, and the `MAPBOX_DAILY_CALL_BUDGET`
+breaker (spec 004) keep worst-case usage inside the free tier. Watch the
+Mapbox Statistics page early on; rotate the token if it ever leaks.
 
 ## License & data attribution
 
@@ -147,27 +168,23 @@ use** — commercial use of this app would require revisiting these terms:
 
 - Housing values: **Zillow Home Value Index (ZHVI)** © Zillow Research.
 - ZIP boundaries: **ZCTA** geometries © U.S. Census Bureau (OpenDataDE mirror).
-- $/sqft (optional): © **Redfin** Data Center.
+- Demographics: **American Community Survey 5-Year Estimates** © U.S. Census Bureau.
+- $/sqft: © **Redfin** Data Center.
 - Basemap tiles: © **CARTO**, © OpenStreetMap contributors.
 - Isochrones & geocoding: **Mapbox** APIs (server-side, token required).
 
-## Verifying the MVP (spec acceptance criteria)
+## Verifying a release
 
-1. Page load shows the ZIP choropleth + color legend. *(choropleth → R1/R2)*
-2. Entering a budget de-emphasizes over-budget ZIPs. *(→ R4)*
-3. The drive-time reach is visible and road-bounded — with a live token, not a
-   circle. Dragging the pin moves it and refetches; an address search relocates
-   it. *(→ R3)*
-4. The browser Network tab shows no Mapbox token in any client request — only
-   `/api/*` calls to your own origin. *(→ R5)*
-5. The metric switcher reshades the map and swaps the legend (Value / YoY /
-   $/sqft); YoY shows falling ZIPs in a distinct hue. *(spec 002 → R4)*
-6. Hovering/tapping a ZIP shows value, YoY, 5-year CAGR, $/sqft, and a sparkline.
-   *(spec 002 → R5)*
-7. Choosing 15/30/45/60 min redraws the reach; three departure bands (off-peak /
-   midday / rush hour) render with distinct outlines, and the panel shows the
-   peak-vs-off-peak reach (mi²) and shrink %. *(spec 003 → R1–R3)*
-8. `pytest` (backend) and `npm run test` (frontend) pass.
+Each spec in [`specs/`](specs/) carries its own acceptance criteria — the
+human walks them against the running app; the implementer does not
+self-certify done. Quick smoke for any deploy:
 
-The human walks this list against the running app; the implementer does not
-self-certify done.
+1. The choropleth + legend render for a distant state (try HI or AK); the
+   legend's five colors each cover ≈20% of the state's ZIPs.
+2. A budget de-emphasizes over-budget ZIPs; the drive-time bands redraw for
+   15/30/45/60 min and are road-bounded (not circles) with a live token.
+3. Clicking a ZIP opens the detail panel (chart, ACS fields, percentile,
+   commute reach); pin + click another ZIP compares them.
+4. A copied URL (`?state=…&zip=…&budget=…`) reproduces the view in a fresh
+   tab; the browser Network tab shows no Mapbox token anywhere.
+5. `pytest` (backend) and `npm run test` (frontend) pass; CI is green.
