@@ -1,0 +1,74 @@
+# Spec 005 — Frontend Resilience, Mobile Layout, First-Run UX
+
+Status: Draft
+Owner: <you>
+Related: 001-mvp, 006-deployment (this ships on the public URL)
+
+## Overview
+
+The SPA works well on a desktop with a healthy backend, but a public audience
+brings failure modes and devices the current UI ignores: fetch failures are
+swallowed silently, a rendering error blanks the page, the fixed 240px panel
+crowds a phone screen, and a first-time visitor gets no orientation. This spec
+makes the frontend degrade visibly and gracefully, usable on mobile, and
+self-explanatory on first visit — without changing the API or the map's
+visual language.
+
+## Requirements
+
+- **R1 — Error boundary.** A React error boundary wraps the app; an uncaught
+  rendering error shows a branded "something went wrong — reload" panel
+  instead of a blank page.
+- **R2 — Surfaced fetch errors.** Failures that today are silently swallowed
+  produce non-blocking, dismissible toasts: per-ZIP records ("ZIP details
+  unavailable"), isochrone ("commute layer unavailable"), region index
+  ("region list unavailable"). The map stays interactive; the choropleth
+  error banner behavior (already present) is unchanged.
+- **R3 — Mobile layout.** At viewport widths ≤ 768px the floating panel
+  becomes a bottom sheet: full-width, capped height, scrollable, with the
+  map filling the screen above it. Controls remain at touch-friendly sizes.
+  Status toasts move to the top so the sheet never covers them.
+- **R4 — Keyboard focus visibility.** All interactive controls show a clear
+  `:focus-visible` outline; keyboard users can tell where they are.
+- **R5 — Bundle chunking.** `maplibre-gl` is split into its own vendor chunk
+  so app-code changes don't invalidate the ~270 KB (gzip) map library in
+  visitors' caches.
+- **R6 — First-run hint.** First-time visitors see a one-line dismissible
+  hint ("Drag the pin to your work location, set a budget"); dismissal is
+  remembered in `localStorage` and it never appears again.
+
+## Non-functional / Constraints
+
+- No new runtime dependencies.
+- No personal data beyond the single `localStorage` dismissal flag (MVP
+  no-persistence constraint holds — the flag stores nothing about the user).
+- Token safety (001-R5) untouched: no new network calls.
+
+## Acceptance Criteria
+
+- [ ] Forcing a render error (dev-only throw) shows the fallback panel, not a
+      blank page.
+- [ ] With the backend stopped mid-session, changing commute time produces a
+      visible "commute layer unavailable" toast; the map stays usable.
+- [ ] At 375px width (iPhone SE class), the panel renders as a bottom sheet,
+      every control is reachable, and the map is visible and pannable.
+- [ ] Tabbing through the panel shows a visible focus ring on every control.
+- [ ] `npm run build` emits separate `maplibre` and app chunks.
+- [ ] The first visit shows the hint; after dismissal a reload does not.
+- [ ] `npm run test` passes with new tests for the boundary, toasts, and
+      first-run hint.
+
+## Out of Scope (explicit)
+
+- Tap-to-place for the work pin (drag works on touch; revisit only if real
+  device testing shows otherwise).
+- MapView refactor/tests (untouched this spec; revisit if its lifecycle code
+  changes).
+- Analytics/telemetry of any kind.
+
+## Verification notes
+
+R1 → dev throw; R2 → kill backend, watch toasts; R3 → DevTools mobile
+viewport + a real phone via the live URL; R4 → keyboard walk; R5 → build
+output; R6 → localStorage clear/reload. The human walks the criteria; the
+implementing agent does not self-certify done.

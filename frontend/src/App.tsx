@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { type CommuteVariation, type RegionInfo, getRegions } from "./api/client";
 import ControlsPanel from "./components/ControlsPanel";
 import MapView from "./components/MapView";
+import Onboarding from "./components/Onboarding";
+import Toasts from "./components/Toasts";
 import {
   type ColorStop,
   DEFAULT_MINUTES,
@@ -27,12 +29,20 @@ export default function App() {
   const [recenter, setRecenter] = useState(0);
 
   const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
-  const { geojson, isochrone, records, loading, error } = useMapData(stateCode, work, minutes);
+  const { geojson, isochrone, records, loading, error, notices } = useMapData(
+    stateCode,
+    work,
+    minutes,
+  );
 
+  const [regionsFailed, setRegionsFailed] = useState(false);
   useEffect(() => {
     getRegions()
-      .then(setRegions)
-      .catch(() => {});
+      .then((r) => {
+        setRegions(r);
+        setRegionsFailed(false);
+      })
+      .catch(() => setRegionsFailed(true));
   }, []);
 
   const region = regions.find((r) => r.code === stateCode) ?? null;
@@ -106,6 +116,13 @@ export default function App() {
         onResetWork={handleResetWork}
         onAddressLocated={handleAddressLocated}
         metroLabel={region?.name ?? "Washington"}
+      />
+      <Onboarding />
+      <Toasts
+        messages={[
+          ...notices,
+          ...(regionsFailed ? ["Region list unavailable — showing Washington only"] : []),
+        ]}
       />
       {loading && <div className="status">Loading map…</div>}
       {error && <div className="status status--error">Couldn’t load map data: {error}</div>}
