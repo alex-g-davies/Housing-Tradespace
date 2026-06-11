@@ -1,0 +1,105 @@
+# Spec 010 — UI Refresh: National Defaults, Accessibility, Branding
+
+Status: Draft
+Owner: <you>
+Related: 007-national-coverage (the scope the UI must catch up to),
+009-zip-explorer (URL-state interplay), 005-frontend-resilience (toasts)
+
+## Overview
+
+The app is national and public, but the UI still behaves like the Seattle
+MVP: the work pin defaults to a named Seattle landmark with a "Reset to
+Museum of Flight" button, raw coordinates display in the panel, address
+search is proximity-biased to Seattle for every visitor, copy is stale
+("30-min" regardless of the time control), and there is no favicon, page
+metadata, or brand presence. This spec nationalizes the defaults (including
+a geolocated landing), regroups the crowded controls panel, fixes the
+accessibility failures found in audit, and integrates the brand assets.
+
+## Requirements
+
+- **R1 — Geolocated landing.** On first load with NO recognized URL params,
+  ask for browser geolocation (6 s timeout, cached fix ≤10 min, low
+  accuracy). On success, map the point to a region (containing bbox; ties
+  broken by distance to region center) and open it with the work pin at the
+  visitor's location, silently. The WA default renders underneath and
+  remains on deny/timeout/unsupported/no-match; a user interaction before
+  the fix arrives cancels it. Any URL param skips geolocation entirely.
+  (Accepts one extra upstream isochrone call per geolocated visit — bounded
+  by 004's rate limit and daily budget.)
+- **R2 — National defaults and copy.** No Seattle-specific names or raw
+  coordinates anywhere in the UI: reset targets the selected state's
+  center ("Reset to {State} center"); the work location reads as a place
+  name (from address search), "{State} center", "Your location", or
+  "Custom pin location" — never lat/lon; the footer reflects the selected
+  commute minutes; region-failure copy and metro-label fallbacks derive
+  from the actual selected state, not "Washington".
+- **R3 — Client-supplied geocode proximity.** `/api/geocode` accepts
+  optional validated `proximity_lat`/`proximity_lon` (±90/±180; used only
+  when both present); the frontend sends the selected region's center.
+  Without proximity the search is unbiased (still `country=us`). The
+  geocode cache key includes the rounded proximity so per-region results
+  never cross-contaminate. Token safety (001-R5) unchanged.
+- **R4 — Panel grouping.** Core controls (region, budget, work, commute
+  minutes, metric switcher, legend) stay always-visible with clear section
+  separation; secondary content (Top movers, traffic-scenario breakdown)
+  collapses behind native `<details>/<summary>` folds.
+- **R5 — Accessibility.** All interactive targets ≥40 px effective height
+  (≥44 px on coarse pointers); muted text meets 4.5:1 contrast; the
+  over-budget legend swatch is visibly rendered (not 15% opacity); the page
+  has exactly one h1 (visually hidden) with panel headings demoted; the
+  address input shows the global focus-visible ring.
+- **R6 — Branding and metadata.** Brand wordmark replaces the text title in
+  the panel header and crash card; an SVG favicon (+ 180 px apple-touch
+  PNG) derived from the brand; `index.html` gains a national title, meta
+  description, theme-color, and absolute Open Graph/Twitter tags
+  (`og:image` = the 1200×630 social image) pointing at
+  https://tradespace-x5xj.onrender.com. Assets live in
+  `frontend/public/brand/` as `logo.png`, `social.png`, `favicon.svg`,
+  `apple-touch-icon.png`.
+
+## Non-functional / Constraints
+
+- No new runtime dependencies; geolocation is browser-native and never
+  reaches the backend or any log (no-personal-data constraint holds — the
+  coordinates only feed the existing work-pin flow a drag would).
+- URL-state (009 R5) interplay: geolocation runs only when the parsed URL
+  is empty; the debounced URL writer then serializes whatever state
+  results, keeping deep links shareable.
+- Existing MapView test exemption unchanged.
+
+## Acceptance Criteria
+
+- [ ] Fresh tab + allow location (DevTools sensor on Denver): Colorado
+      opens, pin at the sensor location labeled "Your location", URL gains
+      `?state=CO&lat=…`. Deny: Washington as today. `/?budget=500000`:
+      no permission prompt.
+- [ ] No "Seattle", "Museum of Flight", or raw coordinates appear anywhere
+      in the UI; reset button names the selected state; footer tracks the
+      minutes control.
+- [ ] Address search while Texas is selected returns Texas matches for an
+      ambiguous query (e.g. "Main St Springfield"-class queries bias local).
+- [ ] Top movers and traffic scenarios collapse/expand; core controls fit
+      a 390 px-wide sheet with materially less scrolling than before.
+- [ ] Lighthouse accessibility: contrast and target-size audits pass;
+      keyboard tab shows a visible ring on every control including the
+      address input; exactly one h1 in the document.
+- [ ] Browser tab shows the favicon; a shared link unfurls with title,
+      description, and the social image; the panel header and crash card
+      show the wordmark.
+- [ ] `pytest` and `npm run test` pass with updated/new tests
+      (geocode proximity + cache isolation, regionForPoint, useGeolocate,
+      copy updates).
+
+## Out of Scope (explicit)
+
+- A designed 1200×630 social card (the app screenshot serves for now) and
+  a true square brand mark (generated favicon until provided).
+- Skip links; full panel redesign; custom domain.
+
+## Verification notes
+
+R1 → DevTools sensor walk; R2 → grep + visual; R3 → pytest + live TX
+search; R4/R5 → 390 px + keyboard + Lighthouse; R6 → tab icon + unfurl
+debugger. The human walks the criteria; the implementing agent does not
+self-certify done.

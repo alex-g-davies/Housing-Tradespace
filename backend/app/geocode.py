@@ -31,15 +31,20 @@ def clear_cache() -> None:
 def forward_geocode(
     token: str,
     query: str,
-    proximity_lon: float,
-    proximity_lat: float,
+    proximity_lon: float | None = None,
+    proximity_lat: float | None = None,
     daily_budget: int = 0,
 ) -> dict[str, Any] | None:
     """Resolve an address/place to {lat, lon, place_name}, biased toward the
-    proximity point. Returns None when there is no match. Raises httpx.HTTPError
-    on upstream failure, UsageBudgetError when the daily budget is exhausted
-    (cache hits, including cached misses, are free)."""
-    key = query.strip().lower()
+    proximity point when one is given (unbiased US-wide otherwise, 010 R3).
+    Returns None when there is no match. Raises httpx.HTTPError on upstream
+    failure, UsageBudgetError when the daily budget is exhausted (cache hits,
+    including cached misses, are free)."""
+    has_proximity = proximity_lon is not None and proximity_lat is not None
+    # The bias changes the answer, so it must be part of the cache key —
+    # otherwise a Texas-biased result would be served to a Washington user.
+    bias = f"{round(proximity_lon, 1)},{round(proximity_lat, 1)}" if has_proximity else "none"
+    key = f"{query.strip().lower()}|{bias}"
     now = time.time()
     hit = _CACHE.get(key)
     if hit and hit[0] > now:
@@ -52,9 +57,10 @@ def forward_geocode(
     params = {
         "access_token": token,
         "limit": 1,
-        "proximity": f"{proximity_lon},{proximity_lat}",
         "country": "us",
     }
+    if has_proximity:
+        params["proximity"] = f"{proximity_lon},{proximity_lat}"
     logger.info("Geocoding an address query")  # no token, no raw query
     resp = httpx.get(url, params=params, timeout=10.0)
     resp.raise_for_status()

@@ -1,5 +1,6 @@
 """Address search endpoint (forward geocoding). The Mapbox token stays
-server-side (R5); the client sends only a free-text query."""
+server-side (R5); the client sends only a free-text query plus an optional
+proximity bias — the selected region's center (spec 010 R3)."""
 
 import logging
 
@@ -15,25 +16,26 @@ from ..usage import UsageBudgetError
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["geocode"])
 
-# Bias results toward the Seattle metro.
-SEATTLE_LON, SEATTLE_LAT = -122.3321, 47.6062
-
 
 @router.get("/geocode", response_model=GeocodeResult)
 @limiter.limit(UPSTREAM_LIMIT)
 def geocode(
     request: Request,
     q: str = Query(..., min_length=1, description="Address or place to find"),
+    proximity_lat: float | None = Query(None, ge=-90, le=90, description="Bias latitude"),
+    proximity_lon: float | None = Query(None, ge=-180, le=180, description="Bias longitude"),
     settings: Settings = Depends(get_settings),
 ) -> GeocodeResult:
     if not settings.mapbox_token.strip():
         raise HTTPException(status_code=503, detail="geocoding unavailable (no token configured)")
+    # Bias only when the client supplies a full point (both-or-none semantics).
+    has_proximity = proximity_lat is not None and proximity_lon is not None
     try:
         result = forward_geocode(
             settings.mapbox_token,
             q,
-            SEATTLE_LON,
-            SEATTLE_LAT,
+            proximity_lon=proximity_lon if has_proximity else None,
+            proximity_lat=proximity_lat if has_proximity else None,
             daily_budget=settings.mapbox_daily_call_budget,
         )
     except UsageBudgetError:
