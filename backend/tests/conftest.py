@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app import commute as commute_module
 from app import data_loader, usage
 from app import geocode as geo_module
 from app import isochrone as iso_module
@@ -35,11 +36,13 @@ def _make_settings(**overrides) -> Settings:
 def _clear_caches():
     iso_module.clear_cache()
     geo_module.clear_cache()
+    commute_module.clear_cache()
     usage.reset()
     limiter.reset()
     yield
     iso_module.clear_cache()
     geo_module.clear_cache()
+    commute_module.clear_cache()
     usage.reset()
     limiter.reset()
 

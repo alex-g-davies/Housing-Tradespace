@@ -30,6 +30,16 @@ class GeocodeResult(BaseModel):
     place_name: str
 
 
+class CommuteEstimate(BaseModel):
+    """Routed drive times for a (home, work) pair (spec 011 R2). Departure
+    labels are origin-local naive timestamps, e.g. '2026-06-15T08:00'."""
+
+    am_minutes: int
+    am_depart_local: str
+    pm_minutes: int
+    pm_depart_local: str
+
+
 class RegionInfo(BaseModel):
     """A selectable state: name + map bounds/center for the picker (national)."""
 

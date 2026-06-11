@@ -19,7 +19,7 @@ from .config import get_settings
 from .data_loader import DataLoadError, get_data_store, load_regions
 from .logging_setup import setup_logging
 from .ratelimit import client_ip, limiter
-from .routers import geocode, housing, isochrone
+from .routers import commute, geocode, housing, isochrone
 
 settings = get_settings()
 setup_logging(settings.log_format)
@@ -67,6 +67,7 @@ async def log_requests(request: Request, call_next) -> Response:
 app.include_router(housing.router)
 app.include_router(isochrone.router)
 app.include_router(geocode.router)
+app.include_router(commute.router)
 
 
 @app.get(HEALTH_PATH)
