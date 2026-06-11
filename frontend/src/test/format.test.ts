@@ -7,6 +7,7 @@ import {
   formatSqMi,
   formatUsd,
   formatUsdCompact,
+  placeLabel,
 } from "../lib/format";
 
 describe("format", () => {
@@ -34,6 +35,12 @@ describe("format", () => {
   it("formats area in square miles, with a dash for null", () => {
     expect(formatSqMi(467.8)).toBe("468 mi²");
     expect(formatSqMi(null)).toBe("—");
+  });
+
+  it("builds place labels with graceful fallbacks (012 R2)", () => {
+    expect(placeLabel("98335", "Gig Harbor", "WA")).toBe("Gig Harbor, WA 98335");
+    expect(placeLabel("98335", "Gig Harbor")).toBe("Gig Harbor 98335");
+    expect(placeLabel("98335", null, "WA")).toBe("ZIP 98335");
   });
 
   it("formats departure labels as weekday + 12h time (011)", () => {

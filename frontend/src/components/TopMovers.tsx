@@ -37,7 +37,7 @@ export default function TopMovers({ records, onZipChosen }: Props) {
         {rows.map((r) => (
           <li key={r.zip}>
             <button type="button" className="movers__row" onClick={() => onZipChosen(r.zip)}>
-              <span className="movers__zip">{r.zip}</span>
+              <span className="movers__zip">{r.name ?? r.zip}</span>
               <span
                 className={`movers__pct ${
                   (r.yoy_pct ?? 0) >= 0 ? "tip__metric--up" : "tip__metric--down"

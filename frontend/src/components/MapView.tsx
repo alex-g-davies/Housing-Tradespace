@@ -40,6 +40,8 @@ interface Props {
   selectedZip: string | null;
   pinnedZip: string | null;
   onSelectZip: (zip: string) => void;
+  /** Selected region code — shown in popup place labels (012 R2). */
+  stateCode: string;
   /** Fly target for top movers / URL deep links (009 R5/R6): bump the signal
    * to fly to the point — same counter pattern as recenterSignal. */
   focusPoint: [number, number] | null;
@@ -93,6 +95,7 @@ export default function MapView({
   selectedZip,
   pinnedZip,
   onSelectZip,
+  stateCode,
   focusPoint,
   focusSignal,
 }: Props) {
@@ -118,6 +121,8 @@ export default function MapView({
   budgetRef.current = budget;
   const recordsRef = useRef(records);
   recordsRef.current = records;
+  const stateCodeRef = useRef(stateCode);
+  stateCodeRef.current = stateCode;
   const metricRef = useRef(activeMetric);
   metricRef.current = activeMetric;
   const stopsRef = useRef(stops);
@@ -178,7 +183,7 @@ export default function MapView({
       const zip = ((f.properties ?? {}) as { zip?: string }).zip ?? "";
       info
         .setLngLat(e.lngLat)
-        .setHTML(buildZipPopupHtml(zip, recordsRef.current.get(zip)))
+        .setHTML(buildZipPopupHtml(zip, recordsRef.current.get(zip), stateCodeRef.current))
         .addTo(m);
     };
     m.on("mousemove", ZIP_FILL, showInfo);

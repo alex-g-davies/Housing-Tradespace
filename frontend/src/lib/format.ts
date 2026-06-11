@@ -39,6 +39,17 @@ export function formatRatio(value: number | null | undefined): string {
   return value == null ? "—" : `${value.toFixed(1)}×`;
 }
 
+/** Human place label for a ZIP (012 R2): "Gig Harbor, WA 98335" — degrading
+ * to "Gig Harbor 98335" without a state code and "ZIP 98335" without a name. */
+export function placeLabel(
+  zip: string,
+  name: string | null | undefined,
+  stateCode?: string | null,
+): string {
+  if (!name) return `ZIP ${zip}`;
+  return stateCode ? `${name}, ${stateCode} ${zip}` : `${name} ${zip}`;
+}
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** Naive local departure timestamp -> "Mon 8:00 AM"; bad input -> "". */

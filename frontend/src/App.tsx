@@ -251,6 +251,7 @@ export default function App() {
         selectedZip={selectedZip}
         pinnedZip={pinnedZip}
         onSelectZip={setSelectedZip}
+        stateCode={stateCode}
         focusPoint={focusPoint}
         focusSignal={focusSignal}
       />
@@ -259,6 +260,7 @@ export default function App() {
           zip={selectedZip}
           record={records.get(selectedZip)}
           metroLabel={region?.name ?? stateCode}
+          stateCode={stateCode}
           budget={budget}
           context={zipContext}
           onClose={() => setSelectedZip(null)}

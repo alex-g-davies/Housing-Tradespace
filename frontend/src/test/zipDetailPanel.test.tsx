@@ -17,6 +17,7 @@ const FULL: ZipValue = {
   population: 48000,
   median_income: 112000,
   price_to_income: 8.4,
+  name: "Fremont",
 };
 
 const OTHER: ZipValue = {
@@ -29,6 +30,7 @@ const OTHER: ZipValue = {
   population: 22000,
   median_income: 70000,
   price_to_income: 6.4,
+  name: "Spokane",
 };
 
 const CONTEXT: ZipContext = {
@@ -52,6 +54,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ZipDetailPanel>[0]> = 
     zip: "98103",
     record: FULL as ZipValue | undefined,
     metroLabel: "Washington",
+    stateCode: "WA",
     budget: 0,
     context: CONTEXT,
     onClose: vi.fn(),
@@ -68,7 +71,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ZipDetailPanel>[0]> = 
 describe("ZipDetailPanel (009 R2/R9)", () => {
   it("renders the full record with ACS fields and context", () => {
     renderPanel();
-    expect(screen.getByText("ZIP 98103")).toBeInTheDocument();
+    expect(screen.getByText("Fremont, WA 98103")).toBeInTheDocument(); // 012 R2
     expect(screen.getByText("$937,500")).toBeInTheDocument();
     expect(screen.getByText("-2.5%")).toBeInTheDocument();
     expect(screen.getByText("48,000")).toBeInTheDocument();
@@ -94,6 +97,7 @@ describe("ZipDetailPanel (009 R2/R9)", () => {
 
   it("degrades to dashes without a record (R9)", () => {
     renderPanel({ zip: "99999", record: undefined, budget: 500000, context: EMPTY_CONTEXT });
+    expect(screen.getByText("ZIP 99999")).toBeInTheDocument(); // no name -> ZIP label
     expect(screen.getByText("No price data")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(5);
     expect(screen.queryByText(/budget by/)).toBeNull(); // no value -> no badge
@@ -130,7 +134,7 @@ describe("ZipDetailPanel compare (009 R7)", () => {
     });
     expect(screen.getByText("Compare")).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
-    expect(screen.getByText("📌 98103")).toBeInTheDocument();
+    expect(screen.getByText("📌 Fremont 98103")).toBeInTheDocument(); // place label (012)
     expect(screen.getByText("$937,500")).toBeInTheDocument(); // pinned value
     expect(screen.getByText("$450,000")).toBeInTheDocument(); // selected value
     // 450000 vs 937500 -> -52.0% (selected relative to pinned)

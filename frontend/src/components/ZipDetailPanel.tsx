@@ -1,5 +1,5 @@
 import type { ZipValue } from "../api/client";
-import { formatCount, formatPct, formatRatio, formatUsd } from "../lib/format";
+import { formatCount, formatPct, formatRatio, formatUsd, placeLabel } from "../lib/format";
 import { deltaPct } from "../lib/zipStats";
 import PriceChart from "./PriceChart";
 
@@ -19,6 +19,7 @@ interface Props {
   zip: string;
   record: ZipValue | undefined;
   metroLabel: string;
+  stateCode: string;
   budget: number;
   context: ZipContext;
   onClose: () => void;
@@ -97,8 +98,12 @@ function CompareView({
     <div className="zip-detail__compare" role="table" aria-label="ZIP comparison">
       <div className="zip-detail__compare-row zip-detail__compare-head" role="row">
         <span role="columnheader" />
-        <span role="columnheader">📌 {pinnedZip}</span>
-        <span role="columnheader">{selectedZip}</span>
+        <span role="columnheader" className="zip-detail__compare-place">
+          📌 {placeLabel(pinnedZip, pinnedRecord?.name ?? null)}
+        </span>
+        <span role="columnheader" className="zip-detail__compare-place">
+          {placeLabel(selectedZip, selectedRecord?.name ?? null)}
+        </span>
         <span role="columnheader">Δ</span>
       </div>
       {COMPARE_ROWS.map((def) => {
@@ -128,6 +133,7 @@ export default function ZipDetailPanel({
   zip,
   record,
   metroLabel,
+  stateCode,
   budget,
   context,
   onClose,
@@ -143,7 +149,9 @@ export default function ZipDetailPanel({
     <aside className="zip-detail" aria-label={`Details for ZIP ${zip}`}>
       <header className="zip-detail__head">
         <div>
-          <h2 className="zip-detail__title">{comparing ? "Compare" : `ZIP ${zip}`}</h2>
+          <h2 className="zip-detail__title">
+            {comparing ? "Compare" : placeLabel(zip, record?.name ?? null, stateCode)}
+          </h2>
           <p className="zip-detail__sub">{metroLabel}</p>
         </div>
         <button type="button" className="zip-detail__close" aria-label="Close" onClick={onClose}>

@@ -528,6 +528,20 @@ body,
 
 .movers__pct {
   font-weight: 600;
+  flex: none;
+}
+
+.movers__zip {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.zip-detail__compare-place {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* Status toasts */

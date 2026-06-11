@@ -16,6 +16,8 @@ export interface ZipValue {
   population: number | null;
   median_income: number | null;
   price_to_income: number | null;
+  // GeoNames primary place name (spec 012); null when unavailable.
+  name: string | null;
 }
 
 export interface HousingResponse {

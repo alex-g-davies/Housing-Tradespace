@@ -14,6 +14,7 @@ function rec(zip: string, yoy: number | null, value = 500000): ZipValue {
     population: null,
     median_income: null,
     price_to_income: null,
+    name: null,
   };
 }
 

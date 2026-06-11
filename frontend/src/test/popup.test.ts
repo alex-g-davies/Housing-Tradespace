@@ -16,12 +16,13 @@ const full: ZipValue = {
   population: 45000,
   median_income: 110000,
   price_to_income: 8.5,
+  name: "Seattle",
 };
 
 describe("buildZipPopupHtml", () => {
   it("renders all metrics, sparkline, and list-$/sqft label", () => {
-    const html = buildZipPopupHtml("98103", full);
-    expect(html).toContain("ZIP 98103");
+    const html = buildZipPopupHtml("98103", full, "WA");
+    expect(html).toContain("Seattle, WA 98103"); // place label (012 R2)
     expect(html).toContain("$937,500");
     expect(html).toContain("-2.5% YoY");
     expect(html).toContain("tip__metric--down"); // negative YoY styled down
@@ -48,6 +49,7 @@ describe("buildZipPopupHtml", () => {
       population: null,
       median_income: null,
       price_to_income: null,
+      name: null,
     };
     const html = buildZipPopupHtml("98109", partial);
     expect(html).toContain("$890,000");

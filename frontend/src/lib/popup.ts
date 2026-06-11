@@ -2,11 +2,16 @@
 // fed to MapLibre's setHTML and unit-tested without a map.
 
 import type { ZipValue } from "../api/client";
-import { formatPct, formatPpsf, formatUsd } from "./format";
+import { formatPct, formatPpsf, formatUsd, placeLabel } from "./format";
 import { buildSparklineSvg } from "./sparkline";
 
-export function buildZipPopupHtml(zip: string, rec: ZipValue | undefined): string {
-  const rows: string[] = [`<div class="tip__zip">ZIP ${zip || "—"}</div>`];
+export function buildZipPopupHtml(
+  zip: string,
+  rec: ZipValue | undefined,
+  stateCode?: string,
+): string {
+  const header = zip ? placeLabel(zip, rec?.name ?? null, stateCode) : "ZIP —";
+  const rows: string[] = [`<div class="tip__zip">${header}</div>`];
 
   if (!rec) {
     rows.push('<div class="tip__val">No price data</div>');
