@@ -441,6 +441,12 @@ def main() -> int:
         help="Only merge ACS fields into EXISTING data/states/*.zhvi.json "
         "(no ZHVI/geometry downloads; geojson untouched)",
     )
+    ap.add_argument(
+        "--enrich-redfin",
+        action="store_true",
+        help="Only merge Redfin $/sqft into EXISTING data/states/*.zhvi.json "
+        "(downloads the national tracker unless --redfin-path is given)",
+    )
     args = ap.parse_args()
 
     def load_acs() -> dict[str, dict[str, int]]:
@@ -448,20 +454,58 @@ def main() -> int:
             return parse_acs(json.loads(Path(args.acs_path).read_text(encoding="utf-8")))
         return fetch_acs(args.acs_year)
 
-    # In-place enrichment mode (008 R7): rewrite existing zhvi files only.
-    if args.enrich_acs:
+    def load_redfin(zips: set[str]) -> dict[str, float]:
+        source = args.redfin_path
+        tmp_file = None
+        if source is None:
+            print("Downloading Redfin $/sqft data (large, one-time)…")
+            tmp_file = tempfile.NamedTemporaryFile(suffix=".tsv.gz", delete=False)
+            tmp_file.close()
+            stream_download(args.redfin_url or REDFIN_URL, Path(tmp_file.name))
+            source = tmp_file.name
         try:
-            acs = load_acs()
-        except (httpx.HTTPError, ValueError) as e:
-            raise SystemExit(f"--enrich-acs aborted: {e}") from None
+            return build_redfin(source, zips)
+        finally:
+            if tmp_file:
+                Path(tmp_file.name).unlink(missing_ok=True)
+
+    # In-place enrichment modes (008 R7 pattern): rewrite existing zhvi files
+    # only — geometry and regions stay byte-identical.
+    if args.enrich_acs or args.enrich_redfin:
         states_dir = Path(args.out_dir) / "states"
-        enriched = 0
-        for path in sorted(states_dir.glob("*.zhvi.json")):
+        paths = sorted(states_dir.glob("*.zhvi.json"))
+        if not paths:
+            raise SystemExit(f"no state files found in {states_dir}")
+
+        acs: dict[str, dict[str, int]] = {}
+        if args.enrich_acs:
+            try:
+                acs = load_acs()
+            except (httpx.HTTPError, ValueError) as e:
+                raise SystemExit(f"--enrich-acs aborted: {e}") from None
+
+        ppsf: dict[str, float] = {}
+        if args.enrich_redfin:
+            all_zips: set[str] = set()
+            for path in paths:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                all_zips.update(r["zip"] for r in payload.get("zips", []))
+            try:
+                ppsf = load_redfin(all_zips)
+            except httpx.HTTPError as e:
+                raise SystemExit(f"--enrich-redfin aborted: {e}") from None
+
+        for path in paths:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            apply_acs(payload.get("zips", []), acs)
+            records = payload.get("zips", [])
+            if args.enrich_acs:
+                apply_acs(records, acs)
+            if args.enrich_redfin:
+                for rec in records:
+                    if rec["zip"] in ppsf:
+                        rec["ppsf"] = ppsf[rec["zip"]]
             path.write_text(json.dumps(payload), encoding="utf-8")
-            enriched += 1
-        print(f"Enriched {enriched} state file(s) in {states_dir}")
+        print(f"Enriched {len(paths)} state file(s) in {states_dir}")
         return 0
 
     print("Loading national ZHVI…")
