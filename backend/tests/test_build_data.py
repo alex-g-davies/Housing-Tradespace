@@ -69,6 +69,57 @@ def test_state_name():
     assert build_data.state_name("DC") == "District Of Columbia"
 
 
+def test_price_to_income():
+    assert build_data.price_to_income(720000, 110000) == 6.5
+    assert build_data.price_to_income(720000, None) is None
+    assert build_data.price_to_income(720000, 0) is None
+    assert build_data.price_to_income(720000, -666666666) is None
+    assert build_data.price_to_income(None, 110000) is None
+
+
+def test_parse_acs_drops_sentinels_and_bad_zips():
+    rows = [
+        ["B01003_001E", "B19013_001E", "zip code tabulation area"],
+        ["45000", "110000", "98101"],  # both fields valid
+        ["12000", "-666666666", "98103"],  # income sentinel -> population only
+        ["0", "-222222222", "98109"],  # nothing valid -> ZIP absent
+        ["500", "60000", "not-a-zip"],  # bad ZIP -> skipped
+        [None, "70000", "00501"],  # null population -> income only
+    ]
+    out = build_data.parse_acs(rows)
+    assert out["98101"] == {"population": 45000, "median_income": 110000}
+    assert out["98103"] == {"population": 12000}
+    assert "98109" not in out
+    assert out["00501"] == {"median_income": 70000}
+    assert "not-a-zip" not in out and len(out) == 3
+
+
+def test_parse_acs_column_order_independent():
+    rows = [
+        ["zip code tabulation area", "B19013_001E", "B01003_001E"],
+        ["98101", "110000", "45000"],
+    ]
+    assert build_data.parse_acs(rows) == {"98101": {"population": 45000, "median_income": 110000}}
+
+
+def test_apply_acs_merges_and_computes_ratio():
+    records = [
+        {"zip": "98101", "median_value": 720000},
+        {"zip": "98115", "median_value": 650000},  # no ACS row -> untouched
+        {"zip": "98103", "median_value": 937500},  # population only -> no ratio
+    ]
+    acs = {
+        "98101": {"population": 45000, "median_income": 110000},
+        "98103": {"population": 12000},
+    }
+    build_data.apply_acs(records, acs)
+    assert records[0]["population"] == 45000
+    assert records[0]["price_to_income"] == 6.5
+    assert records[1] == {"zip": "98115", "median_value": 650000}
+    assert records[2]["population"] == 12000
+    assert "price_to_income" not in records[2]
+
+
 def test_parse_zhvi_national_groups_by_state():
     csv = (
         "RegionName,State,2025-04-30,2026-04-30\n"

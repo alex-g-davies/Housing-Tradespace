@@ -5,20 +5,26 @@ data/regions.json) are committed, the raw inputs are not. Sources are free/aggre
 
   - Zillow ZHVI by ZIP (median home value): national CSV (~122 MB), filtered + grouped by state.
   - Per-state ZIP (ZCTA) boundaries GeoJSON (OpenDataDE mirror of Census TIGER).
+  - Census ACS 5-year (ZCTA level): population + median household income (spec 008).
+    Optional free CENSUS_API_KEY env var lifts API limits; works keyless for our 1 call.
   - Optional Redfin zip_code_market_tracker for sold $/sqft (very large).
 
 Usage (from backend/):
     python scripts/build_data.py                      # all states (huge: ~1 GB of downloads)
     python scripts/build_data.py --states WA,OR,CA    # just these states (dev)
     python scripts/build_data.py --states WA --redfin-url   # + national $/sqft
+    python scripts/build_data.py --enrich-acs         # add ACS fields to EXISTING zhvi files
+                                                      # (no ZHVI/geometry re-download)
 
-Attribution: Zillow Research (ZHVI), U.S. Census Bureau (ZCTA), Redfin Data Center.
+Attribution: Zillow Research (ZHVI), U.S. Census Bureau (ZCTA geometries; ACS 5-Year
+Estimates), Redfin Data Center.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import tempfile
@@ -42,6 +48,14 @@ REDFIN_URL = (
     "https://redfin-public-data.s3.us-west-2.amazonaws.com/"
     "redfin_market_tracker/zip_code_market_tracker.tsv000.gz"
 )
+# ACS 5-year is the only release with ZCTA coverage; since the 2020 vintage,
+# ZCTAs are a national-level geography, so one call fetches all ~33k rows.
+# B01003_001E = total population, B19013_001E = median household income.
+ACS_URL_TEMPLATE = (
+    "https://api.census.gov/data/{year}/acs/acs5"
+    "?get=B01003_001E,B19013_001E&for=zip%20code%20tabulation%20area:*"
+)
+ACS_FIELDS = {"B01003_001E": "population", "B19013_001E": "median_income"}
 _ZIP_RE = re.compile(r"\d{5}")
 
 # Census/OpenDataDE may key the ZIP under any of these property names.
@@ -161,6 +175,78 @@ def downsample_quarterly(date_cols, row, max_points: int = 20) -> list[list]:
         by_quarter[quarter_label(col)] = int(round(float(v)))  # later month wins
     items = list(by_quarter.items())[-max_points:]
     return [[q, v] for q, v in items]
+
+
+def price_to_income(median_value: float | None, median_income: float | None) -> float | None:
+    """Affordability multiple (value / household income), 1 dp. None unless both
+    inputs are positive — Census sentinels and missing fields never produce a ratio."""
+    if not median_value or not median_income or median_value <= 0 or median_income <= 0:
+        return None
+    return round(median_value / median_income, 1)
+
+
+def parse_acs(rows: list[list]) -> dict[str, dict[str, int]]:
+    """Parse a Census ACS JSON response (header row + data rows) into
+    {zip: {population, median_income}} — fields included only when positive.
+
+    The API encodes missing values as large negative sentinels (e.g.
+    -666666666); those and non-positive values are dropped per field, never
+    fatal (008 R2)."""
+    if not rows or len(rows) < 2:
+        return {}
+    header = [str(h) for h in rows[0]]
+    col = {
+        name: header.index(name)
+        for name in (*ACS_FIELDS, "zip code tabulation area")
+        if name in header
+    }
+    if len(col) != len(ACS_FIELDS) + 1:
+        raise SystemExit(f"ACS response missing expected columns (got {header})")
+
+    out: dict[str, dict[str, int]] = {}
+    for row in rows[1:]:
+        z = normalize_zip(row[col["zip code tabulation area"]])
+        if z is None:
+            continue
+        fields: dict[str, int] = {}
+        for table, name in ACS_FIELDS.items():
+            raw = row[col[table]]
+            try:
+                v = int(float(raw))
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                fields[name] = v
+        if fields:
+            out[z] = fields
+    return out
+
+
+def apply_acs(records: list[dict], acs: dict[str, dict[str, int]]) -> None:
+    """Merge ACS fields into ZHVI records in place and (re)compute the
+    price-to-income ratio. Records without ACS data are left untouched."""
+    for rec in records:
+        fields = acs.get(rec["zip"])
+        if not fields:
+            continue
+        rec.update(fields)
+        ratio = price_to_income(rec.get("median_value"), fields.get("median_income"))
+        if ratio is not None:
+            rec["price_to_income"] = ratio
+
+
+def fetch_acs(year: int) -> dict[str, dict[str, int]]:
+    """One national ACS call (optionally keyed via CENSUS_API_KEY env)."""
+    url = ACS_URL_TEMPLATE.format(year=year)
+    key = os.environ.get("CENSUS_API_KEY", "").strip()
+    if key:
+        url += f"&key={key}"
+    with httpx.Client(timeout=180, follow_redirects=True) as c:
+        r = c.get(url)
+        r.raise_for_status()
+        acs = parse_acs(r.json())
+    print(f"ACS {year}: population/income for {len(acs)} ZCTAs")
+    return acs
 
 
 def parse_zhvi_national(zhvi_csv: str) -> tuple[str, dict[str, list[dict]]]:
@@ -320,7 +406,34 @@ def main() -> int:
         const=REDFIN_URL,
         help=f"Download Redfin $/sqft data (large). Bare flag uses {REDFIN_URL}",
     )
+    ap.add_argument("--acs-year", type=int, default=2023, help="ACS 5-year vintage")
+    ap.add_argument("--acs-path", help="Local ACS JSON response (skips download)")
+    ap.add_argument("--no-acs", action="store_true", help="Skip ACS enrichment")
+    ap.add_argument(
+        "--enrich-acs",
+        action="store_true",
+        help="Only merge ACS fields into EXISTING data/states/*.zhvi.json "
+        "(no ZHVI/geometry downloads; geojson untouched)",
+    )
     args = ap.parse_args()
+
+    def load_acs() -> dict[str, dict[str, int]]:
+        if args.acs_path:
+            return parse_acs(json.loads(Path(args.acs_path).read_text(encoding="utf-8")))
+        return fetch_acs(args.acs_year)
+
+    # In-place enrichment mode (008 R7): rewrite existing zhvi files only.
+    if args.enrich_acs:
+        acs = load_acs()
+        states_dir = Path(args.out_dir) / "states"
+        enriched = 0
+        for path in sorted(states_dir.glob("*.zhvi.json")):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            apply_acs(payload.get("zips", []), acs)
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            enriched += 1
+        print(f"Enriched {enriched} state file(s) in {states_dir}")
+        return 0
 
     print("Loading national ZHVI…")
     zhvi_csv = Path(args.zhvi_path).read_text() if args.zhvi_path else _fetch_text(args.zhvi_url)
@@ -349,6 +462,17 @@ def main() -> int:
                     r["ppsf"] = ppsf[r["zip"]]
         if tmp:
             Path(tmp.name).unlink(missing_ok=True)
+
+    # ACS population/income (008): one national fetch, merged before the
+    # per-state split. Failure degrades to a build without ACS fields (R5).
+    if not args.no_acs:
+        try:
+            acs = load_acs()
+        except (httpx.HTTPError, ValueError) as e:
+            print(f"ACS enrichment skipped (fetch/parse failed: {e})")
+        else:
+            for recs in by_state.values():
+                apply_acs(recs, acs)
 
     out_dir = Path(args.out_dir)
     states_dir = out_dir / "states"
