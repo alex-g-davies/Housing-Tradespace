@@ -19,6 +19,18 @@ const FULL: ZipValue = {
   price_to_income: 8.4,
 };
 
+const OTHER: ZipValue = {
+  zip: "99201",
+  median_value: 450000,
+  yoy_pct: 3.5,
+  cagr5_pct: 4.0,
+  ppsf: 280,
+  history: null,
+  population: 22000,
+  median_income: 70000,
+  price_to_income: 6.4,
+};
+
 const CONTEXT: ZipContext = {
   percentile: 82,
   vsStateMedianPct: 31.4,
@@ -31,18 +43,27 @@ const EMPTY_CONTEXT: ZipContext = {
   commuteReach: null,
 };
 
+function renderPanel(overrides: Partial<Parameters<typeof ZipDetailPanel>[0]> = {}) {
+  const props = {
+    zip: "98103",
+    record: FULL as ZipValue | undefined,
+    metroLabel: "Washington",
+    budget: 0,
+    context: CONTEXT,
+    onClose: vi.fn(),
+    pinnedZip: null as string | null,
+    pinnedRecord: undefined as ZipValue | undefined,
+    onPin: vi.fn(),
+    onUnpin: vi.fn(),
+    ...overrides,
+  };
+  render(<ZipDetailPanel {...props} />);
+  return props;
+}
+
 describe("ZipDetailPanel (009 R2/R9)", () => {
   it("renders the full record with ACS fields and context", () => {
-    render(
-      <ZipDetailPanel
-        zip="98103"
-        record={FULL}
-        metroLabel="Washington"
-        budget={0}
-        context={CONTEXT}
-        onClose={() => {}}
-      />,
-    );
+    renderPanel();
     expect(screen.getByText("ZIP 98103")).toBeInTheDocument();
     expect(screen.getByText("$937,500")).toBeInTheDocument();
     expect(screen.getByText("-2.5%")).toBeInTheDocument();
@@ -55,30 +76,12 @@ describe("ZipDetailPanel (009 R2/R9)", () => {
   });
 
   it("shows budget fit when a budget is set", () => {
-    render(
-      <ZipDetailPanel
-        zip="98103"
-        record={FULL}
-        metroLabel="Washington"
-        budget={1000000}
-        context={EMPTY_CONTEXT}
-        onClose={() => {}}
-      />,
-    );
+    renderPanel({ budget: 1000000, context: EMPTY_CONTEXT });
     expect(screen.getByText("Under budget by $62,500")).toBeInTheDocument();
   });
 
   it("degrades to dashes without a record (R9)", () => {
-    render(
-      <ZipDetailPanel
-        zip="99999"
-        record={undefined}
-        metroLabel="Ohio"
-        budget={500000}
-        context={EMPTY_CONTEXT}
-        onClose={() => {}}
-      />,
-    );
+    renderPanel({ zip: "99999", record: undefined, budget: 500000, context: EMPTY_CONTEXT });
     expect(screen.getByText("No price data")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(5);
     expect(screen.queryByText(/budget by/)).toBeNull(); // no value -> no badge
@@ -86,18 +89,42 @@ describe("ZipDetailPanel (009 R2/R9)", () => {
   });
 
   it("fires onClose", () => {
-    const onClose = vi.fn();
-    render(
-      <ZipDetailPanel
-        zip="98103"
-        record={FULL}
-        metroLabel="Washington"
-        budget={0}
-        context={EMPTY_CONTEXT}
-        onClose={onClose}
-      />,
-    );
+    const props = renderPanel({ context: EMPTY_CONTEXT });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(onClose).toHaveBeenCalled();
+    expect(props.onClose).toHaveBeenCalled();
+  });
+});
+
+describe("ZipDetailPanel compare (009 R7)", () => {
+  it("pin button fires onPin", () => {
+    const props = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Pin to compare" }));
+    expect(props.onPin).toHaveBeenCalled();
+  });
+
+  it("shows the pinned hint when the selected ZIP is pinned", () => {
+    const props = renderPanel({ pinnedZip: "98103", pinnedRecord: FULL });
+    const btn = screen.getByRole("button", { name: /Pinned — click another ZIP/ });
+    fireEvent.click(btn);
+    expect(props.onUnpin).toHaveBeenCalled();
+  });
+
+  it("renders side-by-side with signed deltas when a different ZIP is pinned", () => {
+    renderPanel({
+      zip: "99201",
+      record: OTHER,
+      pinnedZip: "98103",
+      pinnedRecord: FULL,
+    });
+    expect(screen.getByText("Compare")).toBeInTheDocument();
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByText("📌 98103")).toBeInTheDocument();
+    expect(screen.getByText("$937,500")).toBeInTheDocument(); // pinned value
+    expect(screen.getByText("$450,000")).toBeInTheDocument(); // selected value
+    // 450000 vs 937500 -> -52.0% (selected relative to pinned)
+    expect(screen.getByText("-52.0%")).toBeInTheDocument();
+    // YoY: 3.5 vs -2.5 -> +6.0 percentage points
+    expect(screen.getByText("+6.0% pt")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unpin 98103" })).toBeInTheDocument();
   });
 });

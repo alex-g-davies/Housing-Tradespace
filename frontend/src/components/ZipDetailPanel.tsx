@@ -1,5 +1,6 @@
 import type { ZipValue } from "../api/client";
 import { formatCount, formatPct, formatRatio, formatUsd } from "../lib/format";
+import { deltaPct } from "../lib/zipStats";
 import PriceChart from "./PriceChart";
 
 export interface ZipContext {
@@ -18,6 +19,11 @@ interface Props {
   budget: number;
   context: ZipContext;
   onClose: () => void;
+  /** Compare (009 R7): pin the current ZIP, then click another to compare. */
+  pinnedZip: string | null;
+  pinnedRecord: ZipValue | undefined;
+  onPin: () => void;
+  onUnpin: () => void;
 }
 
 function budgetBadge(budget: number, value: number | undefined) {
@@ -40,8 +46,81 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: s
   );
 }
 
+interface CompareRowDef {
+  label: string;
+  get: (r: ZipValue | undefined) => number | null;
+  fmt: (v: number) => string;
+  /** "pct" -> relative % delta; "pp" -> percentage-point difference. */
+  delta: "pct" | "pp";
+}
+
+const COMPARE_ROWS: CompareRowDef[] = [
+  { label: "Median value", get: (r) => r?.median_value ?? null, fmt: formatUsd, delta: "pct" },
+  { label: "YoY", get: (r) => r?.yoy_pct ?? null, fmt: formatPct, delta: "pp" },
+  {
+    label: "$/sqft sold",
+    get: (r) => r?.ppsf ?? null,
+    fmt: (v) => `$${Math.round(v)}`,
+    delta: "pct",
+  },
+  { label: "HH income", get: (r) => r?.median_income ?? null, fmt: formatUsd, delta: "pct" },
+  {
+    label: "Price ÷ income",
+    get: (r) => r?.price_to_income ?? null,
+    fmt: (v) => formatRatio(v),
+    delta: "pct",
+  },
+];
+
+function deltaCell(def: CompareRowDef, pinned: number | null, selected: number | null) {
+  if (pinned == null || selected == null) return "—";
+  if (def.delta === "pp") return `${formatPct(Math.round((selected - pinned) * 10) / 10)} pt`;
+  const d = deltaPct(selected, pinned);
+  return d == null ? "—" : formatPct(d);
+}
+
+function CompareView({
+  pinnedZip,
+  pinnedRecord,
+  selectedZip,
+  selectedRecord,
+}: {
+  pinnedZip: string;
+  pinnedRecord: ZipValue | undefined;
+  selectedZip: string;
+  selectedRecord: ZipValue | undefined;
+}) {
+  return (
+    <div className="zip-detail__compare" role="table" aria-label="ZIP comparison">
+      <div className="zip-detail__compare-row zip-detail__compare-head" role="row">
+        <span role="columnheader" />
+        <span role="columnheader">📌 {pinnedZip}</span>
+        <span role="columnheader">{selectedZip}</span>
+        <span role="columnheader">Δ</span>
+      </div>
+      {COMPARE_ROWS.map((def) => {
+        const a = def.get(pinnedRecord);
+        const b = def.get(selectedRecord);
+        return (
+          <div className="zip-detail__compare-row" role="row" key={def.label}>
+            <span className="zip-detail__compare-label" role="rowheader">
+              {def.label}
+            </span>
+            <span role="cell">{a == null ? "—" : def.fmt(a)}</span>
+            <span role="cell">{b == null ? "—" : def.fmt(b)}</span>
+            <span role="cell" className="zip-detail__compare-delta">
+              {deltaCell(def, a, b)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Deep-dive panel for the selected ZIP (009 R2). Every field degrades to "—"
- * so the panel works on data built without ACS (R9). */
+ * so the panel works on data built without ACS (R9). With a different ZIP
+ * pinned, it becomes a side-by-side comparison (R7). */
 export default function ZipDetailPanel({
   zip,
   record,
@@ -49,13 +128,19 @@ export default function ZipDetailPanel({
   budget,
   context,
   onClose,
+  pinnedZip,
+  pinnedRecord,
+  onPin,
+  onUnpin,
 }: Props) {
+  const comparing = pinnedZip != null && pinnedZip !== zip;
   const yoy = record?.yoy_pct ?? null;
+
   return (
     <aside className="zip-detail" aria-label={`Details for ZIP ${zip}`}>
       <header className="zip-detail__head">
         <div>
-          <h2 className="zip-detail__title">ZIP {zip}</h2>
+          <h2 className="zip-detail__title">{comparing ? "Compare" : `ZIP ${zip}`}</h2>
           <p className="zip-detail__sub">{metroLabel}</p>
         </div>
         <button type="button" className="zip-detail__close" aria-label="Close" onClick={onClose}>
@@ -63,52 +148,78 @@ export default function ZipDetailPanel({
         </button>
       </header>
 
-      <p className="zip-detail__value">
-        {record ? formatUsd(record.median_value) : "No price data"}
-      </p>
-      {budgetBadge(budget, record?.median_value)}
-
-      <div className="zip-detail__metrics">
-        <Metric
-          label="YoY"
-          value={yoy == null ? "—" : formatPct(yoy)}
-          tone={yoy == null ? undefined : yoy >= 0 ? "tip__metric--up" : "tip__metric--down"}
-        />
-        <Metric
-          label="5-yr CAGR"
-          value={record?.cagr5_pct == null ? "—" : `${formatPct(record.cagr5_pct)}/yr`}
-        />
-        <Metric
-          label="$/sqft sold"
-          value={record?.ppsf == null ? "—" : `$${Math.round(record.ppsf)}`}
-        />
-      </div>
-
-      <div className="zip-detail__metrics">
-        <Metric label="Population" value={formatCount(record?.population)} />
-        <Metric
-          label="HH income"
-          value={record?.median_income == null ? "—" : formatUsd(record.median_income)}
-        />
-        <Metric label="Price ÷ income" value={formatRatio(record?.price_to_income)} />
-      </div>
-
-      <PriceChart history={record?.history ?? null} />
-
-      <div className="zip-detail__context">
-        {context.percentile != null && (
-          <p>
-            Pricier than <strong>{context.percentile}%</strong> of {metroLabel} ZIPs
-            {context.vsStateMedianPct != null && (
-              <>
-                {" "}
-                · <strong>{formatPct(context.vsStateMedianPct)}</strong> vs state median
-              </>
-            )}
+      {comparing ? (
+        <>
+          <CompareView
+            pinnedZip={pinnedZip}
+            pinnedRecord={pinnedRecord}
+            selectedZip={zip}
+            selectedRecord={record}
+          />
+          <button type="button" className="zip-detail__pin" onClick={onUnpin}>
+            Unpin {pinnedZip}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="zip-detail__value">
+            {record ? formatUsd(record.median_value) : "No price data"}
           </p>
-        )}
-        {context.commuteReach && <p>{context.commuteReach}</p>}
-      </div>
+          {budgetBadge(budget, record?.median_value)}
+
+          <div className="zip-detail__metrics">
+            <Metric
+              label="YoY"
+              value={yoy == null ? "—" : formatPct(yoy)}
+              tone={yoy == null ? undefined : yoy >= 0 ? "tip__metric--up" : "tip__metric--down"}
+            />
+            <Metric
+              label="5-yr CAGR"
+              value={record?.cagr5_pct == null ? "—" : `${formatPct(record.cagr5_pct)}/yr`}
+            />
+            <Metric
+              label="$/sqft sold"
+              value={record?.ppsf == null ? "—" : `$${Math.round(record.ppsf)}`}
+            />
+          </div>
+
+          <div className="zip-detail__metrics">
+            <Metric label="Population" value={formatCount(record?.population)} />
+            <Metric
+              label="HH income"
+              value={record?.median_income == null ? "—" : formatUsd(record.median_income)}
+            />
+            <Metric label="Price ÷ income" value={formatRatio(record?.price_to_income)} />
+          </div>
+
+          <PriceChart history={record?.history ?? null} />
+
+          <div className="zip-detail__context">
+            {context.percentile != null && (
+              <p>
+                Pricier than <strong>{context.percentile}%</strong> of {metroLabel} ZIPs
+                {context.vsStateMedianPct != null && (
+                  <>
+                    {" "}
+                    · <strong>{formatPct(context.vsStateMedianPct)}</strong> vs state median
+                  </>
+                )}
+              </p>
+            )}
+            {context.commuteReach && <p>{context.commuteReach}</p>}
+          </div>
+
+          {pinnedZip === zip ? (
+            <button type="button" className="zip-detail__pin" onClick={onUnpin}>
+              📌 Pinned — click another ZIP to compare · Unpin
+            </button>
+          ) : (
+            <button type="button" className="zip-detail__pin" onClick={onPin}>
+              Pin to compare
+            </button>
+          )}
+        </>
+      )}
     </aside>
   );
 }

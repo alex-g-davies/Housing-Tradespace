@@ -37,6 +37,8 @@ export default function App() {
   const [recenter, setRecenter] = useState(0);
   // Click-to-select (009 R1): drives the outline + detail panel.
   const [selectedZip, setSelectedZip] = useState<string | null>(null);
+  // Pin-and-compare (009 R7).
+  const [pinnedZip, setPinnedZip] = useState<string | null>(null);
   // Fly target for top movers / deep links (counter pattern, 009 R5/R6).
   const [focusPoint, setFocusPoint] = useState<[number, number] | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
@@ -169,7 +171,8 @@ export default function App() {
   const handleStateChange = useCallback(
     (code: string) => {
       setStateCode(code);
-      setSelectedZip(null); // records are per-state; a stale selection is meaningless
+      setSelectedZip(null); // records are per-state; stale selections are meaningless
+      setPinnedZip(null);
       const r = regions.find((x) => x.code === code);
       if (r?.center) setWork({ lat: r.center[1], lon: r.center[0] });
     },
@@ -191,7 +194,7 @@ export default function App() {
         fitBbox={region?.bbox ?? null}
         fitInitialBounds={INITIAL_URL.state != null && INITIAL_URL.zip == null}
         selectedZip={selectedZip}
-        pinnedZip={null}
+        pinnedZip={pinnedZip}
         onSelectZip={setSelectedZip}
         focusPoint={focusPoint}
         focusSignal={focusSignal}
@@ -204,6 +207,10 @@ export default function App() {
           budget={budget}
           context={zipContext}
           onClose={() => setSelectedZip(null)}
+          pinnedZip={pinnedZip}
+          pinnedRecord={pinnedZip ? records.get(pinnedZip) : undefined}
+          onPin={() => setPinnedZip(selectedZip)}
+          onUnpin={() => setPinnedZip(null)}
         />
       )}
       <ControlsPanel

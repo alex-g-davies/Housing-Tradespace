@@ -691,6 +691,54 @@ body,
   margin: 4px 0;
 }
 
+.zip-detail__pin {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #f1f4f8;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.zip-detail__pin:hover {
+  background: #e8edf4;
+}
+
+/* Compare mode (009 R7) */
+.zip-detail__compare {
+  margin-top: 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.zip-detail__compare-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 0.8fr;
+  gap: 4px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  align-items: baseline;
+}
+
+.zip-detail__compare-head {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.zip-detail__compare-label {
+  color: var(--muted);
+}
+
+.zip-detail__compare-delta {
+  font-weight: 600;
+}
+
 /* Price chart (009 R4) */
 .chart {
   display: block;
