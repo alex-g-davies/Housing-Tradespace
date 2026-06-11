@@ -1,0 +1,61 @@
+# Spec 007 — National Coverage at Launch
+
+Status: Draft
+Owner: <you>
+Related: 002-data-enrichment (data shape), 004-backend-hardening (geofence
+derives from the region index), 006-deployment (data ships in the image)
+
+## Overview
+
+The app is architected as national region-on-demand but ships with only three
+states (WA, OH, CA). For a public launch, a visitor from any state should
+find their region in the picker. This spec builds and commits the full
+50-states + DC dataset and verifies the app behaves at that scale.
+
+## Requirements
+
+- **R1 — Full dataset.** `scripts/build_data.py` is run for every state in
+  `STATE_SLUGS` (50 states + DC); per-state `{ST}.geojson` + `{ST}.zhvi.json`
+  and the merged `regions.json` are committed. Skipped states (no ZHVI rows
+  or failed geometry download) are re-run until none remain, or explicitly
+  documented.
+- **R2 — Size bounds.** Total committed state data stays under ~120 MB; any
+  single state's geojson over ~8 MB is rebuilt with a higher simplification
+  tolerance. The Docker image still builds and deploys on Render.
+- **R3 — Picker at scale.** The region picker renders all ~51 entries
+  alphabetically and remains usable (native select scrolls fine; a type-ahead
+  filter is added only if real use feels bad).
+- **R4 — Ramps and geofence nationwide.** Per-region adaptive quantile ramps
+  (already runtime-computed) produce sensible shading for cheap and expensive
+  states alike; the spec-004 geofence accepts work locations in every loaded
+  state — including AK and HI — because it derives from the region index.
+
+## Non-functional / Constraints
+
+- Source data terms unchanged (free/aggregate, attribution in README).
+- `lru_cache(maxsize=8)` on state stores remains the memory bound; bump only
+  if eviction thrash appears in production logs.
+- Raw downloads (~1 GB) are never committed (`scripts/raw` ignored).
+
+## Acceptance Criteria
+
+- [ ] `/api/regions` returns ~51 entries; every entry loads a choropleth.
+- [ ] Five dispersed states spot-checked live (incl. HI and AK): choropleth
+      shades, popups populate, isochrone works at an in-state work location.
+- [ ] Largest committed state geojson ≤ ~8 MB; total `data/states` ≤ ~120 MB.
+- [ ] Backend tests pass against the full dataset (`pytest` uses fixtures,
+      plus a manual `uvicorn` smoke against real data).
+- [ ] The region picker lists states alphabetically and selection flies the
+      map to the region.
+
+## Out of Scope (explicit)
+
+- Automated/monthly data refresh (manual re-run of the build script for now).
+- Redfin $/sqft for all states (optional flag; can be added in a later run).
+- Territories beyond DC (PR, GU, VI — no OpenDataDE geometries).
+
+## Verification notes
+
+R1 → build log + file listing; R2 → size report + Docker build; R3/R4 → live
+spot-checks on the deployed URL. The human walks the criteria; the
+implementing agent does not self-certify done.
