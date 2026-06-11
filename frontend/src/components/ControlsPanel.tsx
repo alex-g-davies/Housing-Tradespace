@@ -1,4 +1,4 @@
-import type { CommuteVariation, RegionInfo } from "../api/client";
+import type { CommuteVariation, RegionInfo, ZipValue } from "../api/client";
 import type { ColorStop, MetricDef, MetricKey, WorkLocation } from "../config";
 import AddressSearch from "./AddressSearch";
 import BudgetInput from "./BudgetInput";
@@ -6,6 +6,7 @@ import CommuteControl from "./CommuteControl";
 import Legend from "./Legend";
 import MetricSwitcher from "./MetricSwitcher";
 import RegionPicker from "./RegionPicker";
+import TopMovers from "./TopMovers";
 
 interface Props {
   regions: RegionInfo[];
@@ -24,6 +25,8 @@ interface Props {
   onResetWork: () => void;
   onAddressLocated: (lat: number, lon: number, label: string) => void;
   metroLabel: string;
+  records: Map<string, ZipValue>;
+  onZipChosen: (zip: string) => void;
 }
 
 /** Floating panel: title, region picker, budget, work controls, switcher, legend. */
@@ -44,6 +47,8 @@ export default function ControlsPanel({
   onResetWork,
   onAddressLocated,
   metroLabel,
+  records,
+  onZipChosen,
 }: Props) {
   return (
     <div className="panel">
@@ -77,6 +82,8 @@ export default function ControlsPanel({
       <span className="section-label">Shade map by</span>
       <MetricSwitcher active={metricKey} onChange={onMetricChange} />
       <Legend metric={activeMetric} stops={stops} budget={budget} />
+
+      <TopMovers records={records} onZipChosen={onZipChosen} />
 
       <p className="panel-foot">
         Hover or tap a ZIP for its metrics · 30-min drive-time overlay

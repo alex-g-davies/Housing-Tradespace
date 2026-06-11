@@ -223,6 +223,8 @@ export default function App() {
         onResetWork={handleResetWork}
         onAddressLocated={handleAddressLocated}
         metroLabel={region?.name ?? "Washington"}
+        records={records}
+        onZipChosen={selectZipAndFly}
       />
       <Onboarding />
       <Toasts

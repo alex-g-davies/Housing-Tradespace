@@ -406,6 +406,67 @@ body,
   opacity: 0.15;
 }
 
+/* Top movers (009 R6) */
+.movers {
+  margin-top: 12px;
+}
+
+.movers__tabs {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 3px;
+  background: #f1f4f8;
+  border-radius: 9px;
+}
+
+.movers__tab {
+  flex: 1 1 0;
+  padding: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.movers__tab--active {
+  color: var(--ink);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 30, 50, 0.14);
+}
+
+.movers__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.movers__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 13px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.movers__row:hover {
+  background: #f1f4f8;
+}
+
+.movers__pct {
+  font-weight: 600;
+}
+
 /* Status toasts */
 .status {
   position: absolute;
