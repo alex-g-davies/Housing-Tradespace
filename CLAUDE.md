@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Standing context for the **LiveNear** project (formerly "tradespace"; the
-repo and Render URL keep the old name). This file describes *how we
+Standing context for the **LiveNear** project (formerly "tradespace"; only
+the Render URL keeps the old name). This file describes *how we
 work here*. It is loaded into every session, so keep it lean and durable.
 Feature requirements, acceptance criteria, and scope do **not** belong here —
 those live in `specs/`.

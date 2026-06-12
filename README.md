@@ -1,7 +1,8 @@
 # LiveNear
 
 **Live at [tradespace-x5xj.onrender.com](https://tradespace-x5xj.onrender.com/)**
-*(formerly "tradespace" — the repo and service URL keep the old name)*
+*(formerly "tradespace" — only the onrender.com subdomain keeps the old name;
+Render subdomains are fixed at service creation)*
 
 Decide where you could live by overlaying **housing cost** and **commute
 time**, nationwide. The map shades every ZIP in a selected state by median
