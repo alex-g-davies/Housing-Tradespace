@@ -1,0 +1,69 @@
+# Spec 017 — Orientation & Clarity
+
+Status: Draft
+Owner: <you>
+Related: 005 R6 (first-run hint — superseded), 009 R1 (click-to-select),
+001 R4 / 010 (budget de-emphasis + basemap), 012 R5 (About panel),
+018 (LiveNear rebrand — new components use the brand constant)
+
+## Overview
+
+Three first-impression fixes. New visitors land on a map with no
+explanation of what the product is — the one-line hint assumes they already
+get it. A selected ZIP can only be dismissed via × or Esc — re-clicking the
+same area should toggle it off. And with a budget set, over-budget ZIPs at
+0.15 opacity wash into the basemap's light water, so "too expensive" and
+"lake" read the same. This spec adds a proper welcome modal, click-to-
+deselect, and a hatch pattern that makes over-budget areas unmistakable.
+
+## Requirements
+
+- **R1 — Welcome modal.** First visit shows a branded modal: logo, a 2–3
+  sentence purpose statement, three one-line how-tos (set a budget / place
+  the work pin & pick a commute / click any ZIP for details), and an
+  "Explore the map" CTA. Dismissal is remembered in localStorage; Esc and
+  the CTA both close it; it can be reopened from a "How it works" link in
+  the About panel. Replaces the 005 R6 one-line hint entirely (component,
+  test, CSS, and old storage key all retired).
+- **R2 — Click-to-deselect.** Clicking the currently selected ZIP on the
+  map deselects it (panel closes, outline clears). Selection from top
+  movers, ZIP search, or deep links always selects (never toggles). A
+  pinned ZIP stays pinned through deselection.
+- **R3 — Over-budget hatching.** When a budget is set, over-budget ZIPs
+  render a diagonal hatch (canvas-generated, registered via `map.addImage`
+  — no static asset) over the existing dimmed fill, visually distinct from
+  water and matching the legend's striped over-budget swatch. No budget →
+  no hatch anywhere. ZIPs without a value never hatch.
+
+## Non-functional / Constraints
+
+- No new dependencies; the hatch is an 8×8 generated canvas tile.
+- Modal follows the existing About-panel a11y pattern (dialog role, Esc,
+  visible close affordance); brand name comes from the shared config
+  constant so the 018 rename is a one-line flip.
+
+## Acceptance Criteria
+
+- [ ] Fresh profile/incognito → welcome modal appears once; "Explore the
+      map" dismisses it; reload → it does not reappear; About → "How it
+      works" reopens it; Esc closes it.
+- [ ] Click a ZIP → panel opens; click the same ZIP → panel closes and the
+      outline clears; × and Esc still work; a pinned ZIP's outline survives
+      deselection; top-movers click still always selects.
+- [ ] Set a budget in a coastal metro → over-budget ZIPs show a hatched dim
+      fill clearly distinguishable from water; clear the budget → hatch
+      gone; no-data ZIPs unhatched throughout.
+- [ ] `npm run test` green, including new welcome-modal, about-link, and
+      over-budget-filter tests; old onboarding test removed.
+
+## Out of Scope (explicit)
+
+- Multi-step tours / coach marks; transit mode; any data changes.
+- The LiveNear rename itself (spec 018).
+
+## Verification notes
+
+R1 → welcomeModal.test.tsx + manual fresh-profile walk; R2 → manual map
+walk (App is integration-level by convention); R3 → colorScale unit tests
+for the filter expression + manual visual check against water. The human
+verifies; the implementing agent does not self-certify done.

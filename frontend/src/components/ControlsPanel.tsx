@@ -41,6 +41,8 @@ interface Props {
   searchProximity: { lat: number; lon: number } | null;
   records: Map<string, ZipValue>;
   onZipChosen: (zip: string) => void;
+  /** Reopens the welcome modal from the About panel (017 R1). */
+  onShowIntro?: () => void;
 }
 
 /** Floating panel: title, region picker, budget, work controls, switcher, legend. */
@@ -71,6 +73,7 @@ export default function ControlsPanel({
   searchProximity,
   records,
   onZipChosen,
+  onShowIntro,
 }: Props) {
   // Mobile-only collapse (015 R5); the toggle is display:none on desktop.
   const [collapsed, setCollapsed] = useState(false);
@@ -155,7 +158,7 @@ export default function ControlsPanel({
       <p className="panel-foot">
         Hover a ZIP for quick stats, click for details · {minutes}-min drive-time overlay
       </p>
-      <AboutPanel />
+      <AboutPanel onShowIntro={onShowIntro} />
     </div>
   );
 }

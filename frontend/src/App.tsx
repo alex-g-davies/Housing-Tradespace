@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type CommuteVariation, type RegionInfo, getRegions } from "./api/client";
 import ControlsPanel from "./components/ControlsPanel";
 import MapView from "./components/MapView";
-import Onboarding from "./components/Onboarding";
 import Toasts from "./components/Toasts";
+import WelcomeModal from "./components/WelcomeModal";
 import ZipDetailPanel, { type ZipContext } from "./components/ZipDetailPanel";
 import {
   DEFAULT_MINUTES,
@@ -39,6 +39,17 @@ const INITIAL_URL = parseAppUrl(window.location.search);
 // intentional, shareable link whose view must not be overridden.
 const GEOLOCATE = Object.keys(INITIAL_URL).length === 0;
 
+// Welcome-modal dismissal flag (017 R1). Already namespaced for 018.
+const WELCOME_KEY = "livenear.welcome-dismissed";
+
+function welcomeDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(WELCOME_KEY) === "1";
+  } catch {
+    return true; // storage blocked -> never nag
+  }
+}
+
 export default function App() {
   const [budget, setBudget] = useState(INITIAL_URL.budget ?? 0);
   const [metricKey, setMetricKey] = useState<MetricKey>(INITIAL_URL.metric ?? "value");
@@ -67,6 +78,16 @@ export default function App() {
   const userTouchedRef = useRef(false);
   const geoAppliedRef = useRef(false);
   const geoFix = useGeolocate(GEOLOCATE);
+  // First-visit welcome (017 R1); reopenable from About -> "How it works".
+  const [showWelcome, setShowWelcome] = useState(() => !welcomeDismissed());
+  const handleWelcomeClose = useCallback(() => {
+    setShowWelcome(false);
+    try {
+      window.localStorage.setItem(WELCOME_KEY, "1");
+    } catch {
+      /* storage blocked -> dismiss for this session only */
+    }
+  }, []);
 
   const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
   const { geojson, records, loading, error, notices } = useMapData(stateCode);
@@ -407,6 +428,7 @@ export default function App() {
         searchProximity={region?.center ? { lat: region.center[1], lon: region.center[0] } : null}
         records={records}
         onZipChosen={selectZipAndFly}
+        onShowIntro={() => setShowWelcome(true)}
       />
       <button
         type="button"
@@ -423,7 +445,7 @@ export default function App() {
           No area within both commutes — try a longer time or move a pin
         </div>
       )}
-      <Onboarding />
+      {showWelcome && <WelcomeModal onClose={handleWelcomeClose} />}
       <Toasts
         messages={[
           ...notices,

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import AboutPanel from "../components/AboutPanel";
 
@@ -32,5 +32,20 @@ describe("AboutPanel (012 R5)", () => {
     fireEvent.click(screen.getByRole("button", { name: /About & data/ }));
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("'How it works' closes the popover and reopens the intro (017 R1)", () => {
+    const onShowIntro = vi.fn();
+    render(<AboutPanel onShowIntro={onShowIntro} />);
+    fireEvent.click(screen.getByRole("button", { name: /About & data/ }));
+    fireEvent.click(screen.getByRole("button", { name: "How it works" }));
+    expect(onShowIntro).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("hides the intro link when no handler is wired", () => {
+    render(<AboutPanel />);
+    fireEvent.click(screen.getByRole("button", { name: /About & data/ }));
+    expect(screen.queryByRole("button", { name: "How it works" })).toBeNull();
   });
 });

@@ -10,9 +10,14 @@ const SOURCES: { name: string; role: string; href: string }[] = [
   { name: "Mapbox", role: "drive-time contours, routing, geocoding", href: "https://www.mapbox.com/" },
 ];
 
+interface Props {
+  /** Reopens the welcome modal (017 R1). */
+  onShowIntro?: () => void;
+}
+
 /** About & data popover (012 R5): every source credited in one place, plus
  * the estimates-not-advice disclaimer. */
-export default function AboutPanel() {
+export default function AboutPanel({ onShowIntro }: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -58,6 +63,20 @@ export default function AboutPanel() {
                 </li>
               ))}
             </ul>
+            {onShowIntro && (
+              <p className="about__foot">
+                <button
+                  type="button"
+                  className="about__intro-link"
+                  onClick={() => {
+                    setOpen(false);
+                    onShowIntro();
+                  }}
+                >
+                  How it works
+                </button>
+              </p>
+            )}
             <p className="about__foot">
               Code AGPL-3.0 ·{" "}
               <a
