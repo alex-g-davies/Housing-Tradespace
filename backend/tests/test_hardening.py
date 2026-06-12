@@ -130,7 +130,9 @@ def test_zips_geojson_etag_304(client):
     first = client.get("/api/zips.geojson")
     assert first.status_code == 200
     etag = first.headers["etag"]
-    assert "max-age=86400" in first.headers["cache-control"]
+    # no-cache = always revalidate against the ETag (data updates appear
+    # immediately; unchanged data still costs only a 304).
+    assert "no-cache" in first.headers["cache-control"]
 
     second = client.get("/api/zips.geojson", headers={"If-None-Match": etag})
     assert second.status_code == 304

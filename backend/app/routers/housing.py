@@ -20,7 +20,12 @@ from ..ratelimit import DATA_LIMIT, limiter
 router = APIRouter(prefix="/api", tags=["housing"])
 
 DEFAULT_STATE = "WA"
-CACHE_CONTROL = "public, max-age=86400"
+# no-cache = store but REVALIDATE every load. With strong ETags the
+# revalidation is a cheap 304, and data updates (new metrics, refreshed
+# values) reach returning browsers immediately instead of after a 24h
+# max-age window — which made newly shipped $/sqft and affordability data
+# look "blank" to anyone with a warm cache.
+CACHE_CONTROL = "no-cache"
 
 
 def _store_for(state: str) -> DataStore:

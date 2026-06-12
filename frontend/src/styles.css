@@ -106,10 +106,10 @@ body,
   cursor: grabbing;
 }
 
-.work-pin-wrap {
-  position: relative;
-}
-
+/* NOTE: no `position` on .work-pin-wrap — MapLibre positions the marker
+   element itself (absolute + transform); overriding it knocks pins out of
+   the map's coordinate space. The badge anchors to the marker's transform
+   containing block. */
 .work-pin__badge {
   position: absolute;
   top: -4px;
