@@ -15,7 +15,7 @@ import {
   type WorkLocation,
 } from "../config";
 import type { ZipValue } from "../api/client";
-import { fillColorExpression, fillOpacityExpression } from "../lib/colorScale";
+import { fillColorExpression, fillOpacityExpression, overBudgetFilter } from "../lib/colorScale";
 import { buildZipPopupHtml } from "../lib/popup";
 
 interface Props {
@@ -57,6 +57,31 @@ const ZIP_FILL = "zip-fill";
 const ISO_LINE = "iso-line";
 const ZIP_SELECTED = "zip-selected";
 const ZIP_PINNED = "zip-pinned";
+const ZIP_OVERBUDGET = "zip-overbudget";
+const HATCH_IMAGE = "overbudget-hatch";
+
+/** 45° hatch tile for over-budget ZIPs (017 R3) — canvas-generated, no
+ * asset. Drawn at 2x and registered with pixelRatio 2 so it stays crisp on
+ * retina. Three parallel strokes tile seamlessly across the square. */
+function hatchImage(): ImageData | null {
+  const size = 16; // 8 CSS px per tile at pixelRatio 2
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.strokeStyle = "rgba(90, 100, 115, 0.9)";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, size);
+  ctx.lineTo(size, 0);
+  ctx.moveTo(-size / 2, size / 2);
+  ctx.lineTo(size / 2, -size / 2);
+  ctx.moveTo(size / 2, size * 1.5);
+  ctx.lineTo(size * 1.5, size / 2);
+  ctx.stroke();
+  return ctx.getImageData(0, 0, size, size);
+}
 
 /** Brand-badge pin element with an A/B label (016 R1). */
 function makePinElement(label: string): { el: HTMLDivElement; badge: HTMLSpanElement } {
@@ -226,6 +251,8 @@ export default function MapView({
 
     m.on("load", () => {
       loaded.current = true;
+      const hatch = hatchImage();
+      if (hatch && !m.hasImage(HATCH_IMAGE)) m.addImage(HATCH_IMAGE, hatch, { pixelRatio: 2 });
       syncZips();
       syncIsochrone();
     });
@@ -272,6 +299,19 @@ export default function MapView({
             OVER_BUDGET_OPACITY,
           ) as never,
         },
+      },
+      anchor,
+    );
+    // Over-budget hatch (017 R3): a fill-pattern pass over the dimmed fill so
+    // "too expensive" can't be mistaken for water. The filter does all the
+    // work — with no budget it matches nothing and the layer paints empty.
+    m.addLayer(
+      {
+        id: ZIP_OVERBUDGET,
+        type: "fill",
+        source: ZIP_SOURCE,
+        filter: overBudgetFilter(budgetRef.current) as never,
+        paint: { "fill-pattern": HATCH_IMAGE, "fill-opacity": 0.5 },
       },
       anchor,
     );
@@ -390,7 +430,8 @@ export default function MapView({
     });
   }, [recenterSignal]);
 
-  // Budget changes only repaint opacity — no data mutation (R4).
+  // Budget changes only repaint opacity + the hatch filter — no data mutation
+  // (R4, 017 R3).
   useEffect(() => {
     const m = map.current;
     if (!m || !loaded.current || !m.getLayer(ZIP_FILL)) return;
@@ -399,6 +440,9 @@ export default function MapView({
       "fill-opacity",
       fillOpacityExpression(budget, IN_BUDGET_OPACITY, OVER_BUDGET_OPACITY) as never,
     );
+    if (m.getLayer(ZIP_OVERBUDGET)) {
+      m.setFilter(ZIP_OVERBUDGET, overBudgetFilter(budget) as never);
+    }
   }, [budget]);
 
   // Metric or per-state stops changed -> repaint the choropleth.

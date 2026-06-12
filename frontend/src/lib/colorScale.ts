@@ -93,6 +93,18 @@ export function fillColorExpression(property: string, stops: ColorStop[]): unkno
 }
 
 /**
+ * MapLibre filter selecting the ZIPs the over-budget hatch layer paints
+ * (017 R3). Mirrors isOverBudget: strictly above budget only; no budget or
+ * no value -> match nothing (the layer renders empty, no toggling needed).
+ */
+export function overBudgetFilter(budget: number | null | undefined): unknown[] {
+  if (budget == null || Number.isNaN(budget) || budget <= 0) {
+    return ["boolean", false];
+  }
+  return ["all", ["has", "median_value"], [">", ["get", "median_value"], budget]];
+}
+
+/**
  * Build the MapLibre fill-opacity expression that de-emphasizes over-budget
  * ZIPs (R4). With no budget (<=0) every ZIP renders at full opacity.
  */

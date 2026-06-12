@@ -379,7 +379,7 @@ export default function App() {
         fitInitialBounds={INITIAL_URL.state != null && INITIAL_URL.zip == null}
         selectedZip={selectedZip}
         pinnedZip={pinnedZip}
-        onSelectZip={setSelectedZip}
+        onSelectZip={(zip) => setSelectedZip((prev) => (prev === zip ? null : zip))}
         stateCode={stateCode}
         focusPoint={focusPoint}
         focusSignal={focusSignal}

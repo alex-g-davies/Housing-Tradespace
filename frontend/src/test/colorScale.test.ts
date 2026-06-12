@@ -8,6 +8,7 @@ import {
   fillOpacityExpression,
   isOverBudget,
   metricValuesFromFeatures,
+  overBudgetFilter,
 } from "../lib/colorScale";
 
 describe("colorForValue (R2)", () => {
@@ -120,6 +121,25 @@ describe("fillColorExpression (R2/002)", () => {
   it("targets the requested property (value vs ppsf)", () => {
     expect(fillColorExpression("median_value", COLOR_STOPS)[1]).toEqual(["has", "median_value"]);
     expect(fillColorExpression("ppsf", COLOR_STOPS)[1]).toEqual(["has", "ppsf"]);
+  });
+});
+
+describe("overBudgetFilter (017 R3)", () => {
+  it("matches only valued features strictly above the budget", () => {
+    expect(overBudgetFilter(800_000)).toEqual([
+      "all",
+      ["has", "median_value"],
+      [">", ["get", "median_value"], 800_000],
+    ]);
+  });
+
+  it("never matches when the budget is unset, zero, or invalid", () => {
+    const never = ["boolean", false];
+    expect(overBudgetFilter(0)).toEqual(never);
+    expect(overBudgetFilter(-1)).toEqual(never);
+    expect(overBudgetFilter(null)).toEqual(never);
+    expect(overBudgetFilter(undefined)).toEqual(never);
+    expect(overBudgetFilter(NaN)).toEqual(never);
   });
 });
 

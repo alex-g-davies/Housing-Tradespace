@@ -529,12 +529,11 @@ body,
 }
 
 .legend-swatch--faded {
-  /* Full-opacity stripes read as "de-emphasized" while staying visible
-     against the panel (010 R5) — the map itself still fades over-budget
-     ZIPs via fill-opacity. */
+  /* Stripes in the same slate as the map's over-budget hatch layer
+     (017 R3), so the legend swatch and the painted pattern read as one. */
   background: repeating-linear-gradient(
     45deg,
-    #9ecae1 0 3px,
+    rgba(90, 100, 115, 0.9) 0 3px,
     #ffffff 3px 6px
   );
 }
