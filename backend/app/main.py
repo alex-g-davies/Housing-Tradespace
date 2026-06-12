@@ -23,9 +23,9 @@ from .routers import commute, geocode, housing, isochrone
 
 settings = get_settings()
 setup_logging(settings.log_format)
-access_logger = logging.getLogger("tradespace.access")
+access_logger = logging.getLogger("livenear.access")
 
-app = FastAPI(title="tradespace", version="0.1.0")
+app = FastAPI(title="LiveNear", version="0.1.0")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

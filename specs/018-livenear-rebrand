@@ -1,0 +1,58 @@
+# Spec 018 — LiveNear Rebrand
+
+Status: Draft
+Owner: <you>
+Related: 010 (branding assets + social cards), 017 (welcome modal uses the
+brand constant)
+
+## Overview
+
+The product is renamed **tradespace → LiveNear**. The user supplies a new
+logo and favicon; the implementation regenerates the optimized derivatives
+and flips every user-facing and internal product-name string. The public
+URL and the GitHub repository name are deliberately untouched.
+
+## Requirements
+
+- **R1 — Copy flip.** Every product-name occurrence reads LiveNear: the
+  shared `BRAND_NAME` constant (panel logo alt, crash-card alt, welcome
+  modal, About panel), `index.html` title/description/OG title, the
+  `sr-only` h1, `package.json` name, backend `FastAPI(title=…)` and the
+  access-logger name, README, CLAUDE.md, deployment docs, CI image tags.
+  `og:url`/`og:image` keep the current onrender.com origin (R3).
+- **R2 — Assets.** User-provided logo + favicon sources land in
+  `frontend/public/brand/`; derivatives are regenerated with the
+  established pipeline: `logo.png` (~360 px wordmark), `favicon-64.png`,
+  `apple-touch-icon.png` (180 px), `mark-512.png` (also the map pin).
+  `social.png` is replaced only if a new card is provided. Source masters
+  stay local (gitignored), never committed; generation and any cleanup run
+  as strictly separate steps.
+- **R3 — Continuity.** The Render service name/URL and the GitHub repo
+  name are NOT changed by this spec — both are separate user decisions
+  (a service rename breaks every shared link). The `render.yaml` service
+  name stays as-is so a blueprint sync cannot spawn a second service.
+  The old `tradespace.*` localStorage keys are orphaned harmlessly; new
+  keys use the `livenear.*` namespace (017 already does).
+
+## Acceptance Criteria
+
+- [ ] `grep -ri tradespace` over the source tree returns only the
+      deliberate survivors: repo/Render URLs, `render.yaml` service name,
+      and historical spec text.
+- [ ] Browser tab shows the LiveNear title + new favicon; panel, welcome
+      modal, About, and crash card show the new wordmark and name.
+- [ ] Map pins render the new mark; social-card meta still resolves.
+- [ ] `npm run test`, `npm run build`, and `pytest` green with updated
+      copy assertions.
+
+## Out of Scope (explicit)
+
+- Renaming the Render service / public URL or the GitHub repository.
+- A custom domain; a designed social card (the map screenshot stays unless
+  a new card is provided).
+
+## Verification notes
+
+R1 → grep sweep + test suites; R2 → visual check of tab/panel/pin at
+localhost and on Render after deploy. The human verifies; the implementing
+agent does not self-certify done.

@@ -5,7 +5,7 @@ import { formatPct, formatPpsf, formatUsdCompact } from "./lib/format";
 
 // Product name, referenced by components instead of hardcoding it so a
 // rename is a one-line change (018).
-export const BRAND_NAME = "tradespace";
+export const BRAND_NAME = "LiveNear";
 
 // Backend API base. In dev, Vite proxies /api -> http://localhost:8000, so the
 // frontend only ever calls its own origin — no Mapbox token reaches the client (R5).

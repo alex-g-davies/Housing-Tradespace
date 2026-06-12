@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { BRAND_NAME } from "../config";
+
 const SOURCES: { name: string; role: string; href: string }[] = [
   { name: "Zillow ZHVI", role: "median home values + history", href: "https://www.zillow.com/research/data/" },
   { name: "U.S. Census Bureau", role: "ZIP boundaries (ZCTA) + ACS population/income", href: "https://www.census.gov/" },
@@ -33,10 +35,14 @@ export default function AboutPanel({ onShowIntro }: Props) {
         ⓘ About & data
       </button>
       {open && (
-        <div className="about" role="dialog" aria-label="About tradespace and its data sources">
+        <div
+          className="about"
+          role="dialog"
+          aria-label={`About ${BRAND_NAME} and its data sources`}
+        >
           <div className="about__card">
             <header className="about__head">
-              <h2 className="about__title">About tradespace</h2>
+              <h2 className="about__title">About {BRAND_NAME}</h2>
               <button
                 type="button"
                 className="about__close"
@@ -47,7 +53,7 @@ export default function AboutPanel({ onShowIntro }: Props) {
               </button>
             </header>
             <p className="about__blurb">
-              tradespace overlays housing cost and commute reach so you can see
+              {BRAND_NAME} overlays housing cost and commute reach so you can see
               where you could live. All figures are estimates built from public,
               aggregate data — <strong>not financial or real-estate advice</strong>.
               Traffic and prices vary; verify anything that matters.

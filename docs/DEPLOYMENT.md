@@ -6,7 +6,7 @@
 
 ## Summary
 
-Deploy **tradespace** (FastAPI API + static React/Vite SPA + read-only per-state
+Deploy **LiveNear** (FastAPI API + static React/Vite SPA + read-only per-state
 data files + a server-side Mapbox token). The app is **stateless with no
 database**, so this is mostly **packaging + hosting + CI/CD**. Goal: a single HTTPS
 domain serving the SPA and `/api/*`, with the Mapbox token kept server-side (R5).

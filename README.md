@@ -1,6 +1,7 @@
-# tradespace
+# LiveNear
 
 **Live at [tradespace-x5xj.onrender.com](https://tradespace-x5xj.onrender.com/)**
+*(formerly "tradespace" — the repo and service URL keep the old name)*
 
 Decide where you could live by overlaying **housing cost** and **commute
 time**, nationwide. The map shades every ZIP in a selected state by median
@@ -147,8 +148,8 @@ Render dashboard).
 
 ```powershell
 # Local production-image smoke test (from the repo root):
-docker build -f backend/Dockerfile -t tradespace .
-docker run --rm -p 8000:8000 -e MAPBOX_TOKEN=$env:MAPBOX_TOKEN tradespace
+docker build -f backend/Dockerfile -t livenear .
+docker run --rm -p 8000:8000 -e MAPBOX_TOKEN=$env:MAPBOX_TOKEN livenear
 # -> http://localhost:8000 serves the SPA; /api/* the API.
 ```
 

@@ -362,7 +362,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <h1 className="sr-only">tradespace — housing affordability and commute map</h1>
+      <h1 className="sr-only">LiveNear — housing affordability and commute map</h1>
       <MapView
         geojson={geojson}
         isochrone={isochrone}

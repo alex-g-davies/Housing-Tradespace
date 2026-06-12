@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { CommuteVariation, RegionInfo, ZipValue } from "../api/client";
+import { BRAND_NAME } from "../config";
 import type { ColorStop, MetricDef, MetricKey, TravelMode } from "../config";
 import AboutPanel from "./AboutPanel";
 import AddressSearch from "./AddressSearch";
@@ -88,7 +89,7 @@ export default function ControlsPanel({
       >
         {collapsed ? "▲" : "▼"}
       </button>
-      <img src="/brand/logo.png" alt="tradespace" className="panel-logo" />
+      <img src="/brand/logo.png" alt={BRAND_NAME} className="panel-logo" />
 
       <div className="panel__section">
         {regions.length > 0 && (

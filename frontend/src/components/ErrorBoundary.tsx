@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
+import { BRAND_NAME } from "../config";
+
 interface Props {
   children: ReactNode;
 }
@@ -26,7 +28,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="crash">
         <div className="crash__card" role="alert">
-          <img src="/brand/logo.png" alt="tradespace" className="crash__logo" />
+          <img src="/brand/logo.png" alt={BRAND_NAME} className="crash__logo" />
           <p className="crash__msg">Something went wrong rendering the map.</p>
           <button
             type="button"

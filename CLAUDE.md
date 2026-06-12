@@ -1,13 +1,14 @@
 # CLAUDE.md
 
-Standing context for the **tradespace** project. This file describes *how we
+Standing context for the **LiveNear** project (formerly "tradespace"; the
+repo and Render URL keep the old name). This file describes *how we
 work here*. It is loaded into every session, so keep it lean and durable.
 Feature requirements, acceptance criteria, and scope do **not** belong here —
 those live in `specs/`.
 
 ## What this is
 
-tradespace helps people decide where they could live by overlaying housing
+LiveNear helps people decide where they could live by overlaying housing
 cost and commute time around fixed constraints (a work location and a budget).
 It renders a map that shades areas by median home value and overlays drive-time
 **isochrones** — contours of equal travel time — so a user can see which areas
