@@ -5,7 +5,10 @@ dist/
 *.tsbuildinfo
 
 # Brand source masters stay local; only the optimized derivatives
-# (logo.png, social.png, favicon-64.png, ...) are committed.
+# (logo.png, banner.png, social.png, favicon-64.png, ...) are committed.
 public/brand/logo.svg
 public/brand/favicon.png.png
 public/brand/favicon.svg
+public/brand/*-master.png
+# 018 drop: duplicate of banner-master.png under its original name.
+public/brand/favicon.png

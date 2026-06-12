@@ -730,8 +730,9 @@ body,
 }
 
 .welcome__logo {
-  height: 40px;
-  width: auto;
+  /* Slogan banner (3:1) — let it own the card width minus the close button. */
+  width: calc(100% - 44px);
+  height: auto;
 }
 
 .welcome__steps {
