@@ -318,6 +318,12 @@ body,
   color: var(--muted);
 }
 
+.work__address {
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
 .work__hint {
   font-size: 11px;
   color: var(--muted);

@@ -25,6 +25,8 @@ interface Props {
   mode: TravelMode;
   onModeChange: (mode: TravelMode) => void;
   onAddressLocated: (lat: number, lon: number, label: string) => void;
+  /** Reverse-geocoded nearest address for the pin (015 R1); null hides it. */
+  workAddress: string | null;
   /** Bias point for address search — the selected region's center. */
   searchProximity: { lat: number; lon: number } | null;
   records: Map<string, ZipValue>;
@@ -48,6 +50,7 @@ export default function ControlsPanel({
   mode,
   onModeChange,
   onAddressLocated,
+  workAddress,
   searchProximity,
   records,
   onZipChosen,
@@ -66,6 +69,7 @@ export default function ControlsPanel({
       <div className="panel__section work">
         <span className="work__label">Work location</span>
         <AddressSearch onLocated={onAddressLocated} proximity={searchProximity} />
+        {workAddress && <span className="work__address">📍 {workAddress}</span>}
         <span className="work__hint">Drag the pin to move it, or search an address</span>
       </div>
 

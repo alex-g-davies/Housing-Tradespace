@@ -95,6 +95,15 @@ export interface CommuteVariation {
   peak_shrink_pct: number | null;
 }
 
+/** Reverse-geocode a pin position via the backend (015 R1). Resolves to null
+ * on a 404 (no nearby address) — absence is a normal outcome, not an error. */
+export async function getReverseGeocode(lat: number, lon: number): Promise<GeocodeResult | null> {
+  const res = await fetch(`${API_BASE}/geocode/reverse?lat=${lat}&lon=${lon}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`reverse geocode -> ${res.status}`);
+  return (await res.json()) as GeocodeResult;
+}
+
 /** Forward-geocode an address via the backend, optionally biased toward a
  * point — the selected region's center (010 R3). Throws Error("not_found") on
  * a 404 (no match) so callers can show a friendly message; never calls Mapbox. */

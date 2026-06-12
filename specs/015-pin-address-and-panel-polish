@@ -1,0 +1,71 @@
+# Spec 015 — Pin Address & Panel Polish
+
+Status: Draft
+Owner: <you>
+Related: 010 (geocode endpoint family, panel layout), 004 (hardening
+invariants for the new endpoint), 005 (mobile sheets), 014 (the Afford.
+button this fixes)
+
+## Overview
+
+Four contained quality fixes. The work pin gains a live "nearest address"
+label via reverse geocoding (the informative replacement for the static
+label removed in the 010 polish). The budget input formats with thousands
+separators and the left panel adopts a consistent type scale. The metric
+switcher stops truncating "Afford." by becoming a 2×2 grid. And on phones,
+both bottom sheets collapse to slim handles so the map can own the screen.
+
+## Requirements
+
+- **R1 — Reverse-geocoded pin address.** `GET /api/geocode/reverse?lat&lon`
+  resolves the nearest address via Mapbox (same family as forward
+  geocoding), with the full 004 hardening: input snapped to the 500 m grid
+  BEFORE cache key and upstream call, 24 h cache including misses, budget
+  reserve(1), per-IP rate limit, coverage geofence (422 — this endpoint is
+  not a free worldwide reverse geocoder), no-token/budget/upstream → 503,
+  no match → 404. The work section displays the address under the search
+  box, debounced against pin drags, best-effort (absent on failure); a
+  forward-search result seeds the label instantly without a round trip.
+- **R2 — Budget formatting.** The budget input displays thousands
+  separators while typing ("800,000") and still emits the parsed number;
+  pasting formatted values works.
+- **R3 — Type scale.** Panel font sizes consolidate onto three tokens
+  (section 12px / control 13px / hint 11px) applied across all panel
+  sections, ending the per-component drift.
+- **R4 — Metric-switcher fitment.** The four metric buttons render as a
+  2×2 grid: every label fully legible at the panel's width, with headroom
+  for a future fifth metric. Tap targets stay ≥40 px.
+- **R5 — Mobile sheet collapse.** On ≤768 px viewports, the controls sheet
+  and the ZIP-detail sheet each collapse to a slim handle (≈56 px) via a
+  keyboard-accessible toggle with `aria-expanded`; tapping re-expands.
+  Selecting a new ZIP re-expands the detail sheet. Desktop is unaffected.
+
+## Non-functional / Constraints
+
+- Reverse geocode cost: 1 upstream call per snapped pin cell per 24 h
+  (~250 m label imprecision from the snap is accepted).
+- No new dependencies. Token safety (001 R5) unchanged.
+
+## Acceptance Criteria
+
+- [ ] Dragging the pin updates the address line after settling; address
+      search shows its label instantly; no-token mode shows no line.
+- [ ] Two pin positions <500 m apart produce one upstream reverse call.
+- [ ] Budget shows separators while typing and round-trips parsed values.
+- [ ] "Affordability" button text is fully visible; all four metrics
+      reachable; keyboard focus ring intact.
+- [ ] At 390 px: both sheets collapse to handles showing the full map and
+      re-expand on tap; new ZIP selection re-expands the detail sheet.
+- [ ] `pytest` and `npm run test` green with the new endpoint, hook,
+      format, switcher, and collapse tests.
+
+## Out of Scope (explicit)
+
+- Reverse geocoding for arbitrary map clicks (work pins only).
+- Caret-position preservation in the budget input (end-caret accepted).
+
+## Verification notes
+
+R1 → pytest + live drag; R2/R3 → unit tests + visual; R4 → visual at
+240 px panel; R5 → 390 px viewport walk. The human verifies; the
+implementing agent does not self-certify done.

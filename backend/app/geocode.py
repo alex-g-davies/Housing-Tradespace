@@ -14,18 +14,54 @@ from urllib.parse import quote
 import httpx
 
 from . import usage
+from .isochrone import snap_origin
 
 logger = logging.getLogger(__name__)
 
 GEOCODE_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places/{query}.json"
 
-# Cache: normalized query -> (expires_at, result-or-None). None caches a miss.
+# Cache: normalized query (forward) or "rev|lon,lat" (reverse, snapped) ->
+# (expires_at, result-or-None). None caches a miss.
 _CACHE: dict[str, tuple[float, dict[str, Any] | None]] = {}
 CACHE_TTL_SECONDS = 24 * 60 * 60
 
 
 def clear_cache() -> None:
     _CACHE.clear()
+
+
+def reverse_geocode(
+    token: str, lat: float, lon: float, daily_budget: int = 0
+) -> dict[str, Any] | None:
+    """Nearest address for a point (spec 015 R1). The input is snapped to the
+    isochrone cache grid FIRST, so the address updates exactly when the reach
+    does and cache cardinality stays bounded (004 R2 argument). Returns None
+    when nothing is found; misses are cached. Raises httpx.HTTPError upstream,
+    UsageBudgetError when the daily budget is exhausted."""
+    lat, lon = snap_origin(lat, lon)
+    key = f"rev|{lon},{lat}"
+    now = time.time()
+    hit = _CACHE.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    if not usage.reserve(1, daily_budget):
+        raise usage.UsageBudgetError("daily upstream budget exhausted")
+
+    url = GEOCODE_URL.format(query=f"{lon},{lat}")
+    params = {"access_token": token, "limit": 1, "types": "address", "country": "us"}
+    logger.info("Reverse geocoding a pin position")  # no coordinates, no token
+    resp = httpx.get(url, params=params, timeout=10.0)
+    resp.raise_for_status()
+
+    features = resp.json().get("features", [])
+    result: dict[str, Any] | None = None
+    if features:
+        f_lon, f_lat = features[0]["center"]
+        result = {"lat": f_lat, "lon": f_lon, "place_name": features[0].get("place_name", "")}
+
+    _CACHE[key] = (now + CACHE_TTL_SECONDS, result)
+    return result
 
 
 def forward_geocode(

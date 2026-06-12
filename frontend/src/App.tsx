@@ -19,6 +19,7 @@ import {
 } from "./config";
 import { useCommute } from "./hooks/useCommute";
 import { useGeolocate } from "./hooks/useGeolocate";
+import { useReverseGeocode } from "./hooks/useReverseGeocode";
 import { useMapData } from "./hooks/useMapData";
 import { useWikiSummary } from "./hooks/useWikiSummary";
 import { metricValuesFromFeatures, resolveStops } from "./lib/colorScale";
@@ -237,15 +238,23 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [stateCode, selectedZip, budget, work, minutes, metricKey, mode]);
 
+  // Seed label for the pin-address line (015 R1): an address search already
+  // knows its place_name — show it instantly; drags clear it so the reverse
+  // lookup takes over.
+  const [workSeed, setWorkSeed] = useState<string | null>(null);
   const handleWorkDrag = useCallback((lat: number, lon: number) => {
     userTouchedRef.current = true;
     setWork({ lat, lon });
+    setWorkSeed(null);
   }, []);
-  const handleAddressLocated = useCallback((lat: number, lon: number) => {
+  const handleAddressLocated = useCallback((lat: number, lon: number, label: string) => {
     userTouchedRef.current = true;
     setWork({ lat, lon });
+    setWorkSeed(label);
     setRecenter((n) => n + 1);
   }, []);
+
+  const workAddress = useReverseGeocode(work.lat, work.lon, workSeed);
 
   const handleStateChange = useCallback(
     (code: string) => {
@@ -314,6 +323,7 @@ export default function App() {
         mode={mode}
         onModeChange={setMode}
         onAddressLocated={handleAddressLocated}
+        workAddress={workAddress}
         searchProximity={region?.center ? { lat: region.center[1], lon: region.center[0] } : null}
         records={records}
         onZipChosen={selectZipAndFly}

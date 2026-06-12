@@ -8,7 +8,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..config import Settings, get_settings
-from ..geocode import forward_geocode
+from ..data_loader import within_coverage
+from ..geocode import forward_geocode, reverse_geocode
 from ..models import GeocodeResult
 from ..ratelimit import UPSTREAM_LIMIT, limiter
 from ..usage import UsageBudgetError
@@ -47,4 +48,34 @@ def geocode(
 
     if result is None:
         raise HTTPException(status_code=404, detail=f"no match for {q!r}")
+    return GeocodeResult(**result)
+
+
+@router.get("/geocode/reverse", response_model=GeocodeResult)
+@limiter.limit(UPSTREAM_LIMIT)
+def geocode_reverse(
+    request: Request,
+    lat: float = Query(..., ge=-90, le=90, description="Pin latitude"),
+    lon: float = Query(..., ge=-180, le=180, description="Pin longitude"),
+    settings: Settings = Depends(get_settings),
+) -> GeocodeResult:
+    """Nearest address for a work pin (015 R1). Geofenced to covered regions
+    so this never becomes a free worldwide reverse geocoder."""
+    if not settings.mapbox_token.strip():
+        raise HTTPException(status_code=503, detail="geocoding unavailable (no token configured)")
+    if not within_coverage(lat, lon):
+        raise HTTPException(status_code=422, detail="location outside the covered regions")
+    try:
+        result = reverse_geocode(
+            settings.mapbox_token, lat, lon, daily_budget=settings.mapbox_daily_call_budget
+        )
+    except UsageBudgetError:
+        logger.warning("Reverse geocoding skipped: daily upstream budget exhausted")
+        raise HTTPException(status_code=503, detail="geocoding temporarily unavailable") from None
+    except httpx.HTTPError:
+        logger.warning("Reverse geocoding upstream call failed")
+        raise HTTPException(status_code=503, detail="geocoding upstream unavailable") from None
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="no address near this point")
     return GeocodeResult(**result)

@@ -80,3 +80,54 @@ def test_geocode_upstream_error_503_without_token(make_client, httpx_mock):
 def test_geocode_requires_nonempty_query(make_client):
     client = make_client(mapbox_token=TOKEN)
     assert client.get("/api/geocode", params={"q": ""}).status_code == 422
+
+
+# --- reverse geocoding (spec 015 R1) ---------------------------------------------
+
+REV = {"lat": 47.61, "lon": -122.33}  # inside the WA fixture bbox
+REV_SAMPLE = {
+    "features": [{"center": [-122.3301, 47.6099], "place_name": "401 Pine St, Seattle, WA 98101"}]
+}
+
+
+def test_reverse_geocode_returns_address(make_client, httpx_mock):
+    httpx_mock.add_response(json=REV_SAMPLE)
+    client = make_client(mapbox_token=TOKEN)
+    r = client.get("/api/geocode/reverse", params=REV)
+    assert r.status_code == 200
+    assert "Pine St" in r.json()["place_name"]
+    url = str(httpx_mock.get_requests()[0].url)
+    assert "types=address" in url and TOKEN in url
+    assert TOKEN not in r.text
+
+
+def test_reverse_geocode_snaps_nearby_points_to_one_call(make_client, httpx_mock):
+    httpx_mock.add_response(json=REV_SAMPLE, is_reusable=True)
+    client = make_client(mapbox_token=TOKEN)
+    assert client.get("/api/geocode/reverse", params=REV).status_code == 200
+    nudged = {"lat": 47.6109, "lon": -122.3296}  # same 500 m cell
+    assert client.get("/api/geocode/reverse", params=nudged).status_code == 200
+    assert len(httpx_mock.get_requests()) == 1
+
+
+def test_reverse_geocode_miss_404_and_cached(make_client, httpx_mock):
+    httpx_mock.add_response(json={"features": []}, is_reusable=True)
+    client = make_client(mapbox_token=TOKEN)
+    assert client.get("/api/geocode/reverse", params=REV).status_code == 404
+    assert client.get("/api/geocode/reverse", params=REV).status_code == 404
+    assert len(httpx_mock.get_requests()) == 1  # miss cached
+
+
+def test_reverse_geocode_geofenced(make_client, httpx_mock):
+    client = make_client(mapbox_token=TOKEN)
+    r = client.get("/api/geocode/reverse", params={"lat": 48.85, "lon": 2.35})  # Paris
+    assert r.status_code == 422
+    assert len(httpx_mock.get_requests()) == 0
+
+
+def test_reverse_geocode_budget_exhausted_503(make_client, httpx_mock):
+    httpx_mock.add_response(json=REV_SAMPLE)
+    client = make_client(mapbox_token=TOKEN, mapbox_daily_call_budget=1)
+    assert client.get("/api/geocode/reverse", params=REV).status_code == 200
+    far = {"lat": 47.69, "lon": -122.29}  # different cell, budget spent
+    assert client.get("/api/geocode/reverse", params=far).status_code == 503
