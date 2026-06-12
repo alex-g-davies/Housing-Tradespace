@@ -97,6 +97,16 @@ describe("ZipDetailPanel (009 R2/R9)", () => {
     expect(screen.getByText("Estimating commute…")).toBeInTheDocument();
   });
 
+  it("collapse toggle flips state and aria-expanded (015 R5)", () => {
+    renderPanel();
+    const toggle = screen.getByRole("button", { name: "Collapse details" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(toggle);
+    const expanded = screen.getByRole("button", { name: "Expand details" });
+    expect(expanded).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector(".zip-detail--collapsed")).not.toBeNull();
+  });
+
   it("shows budget fit when a budget is set", () => {
     renderPanel({ budget: 1000000, context: EMPTY_CONTEXT });
     expect(screen.getByText("Under budget by $62,500")).toBeInTheDocument();

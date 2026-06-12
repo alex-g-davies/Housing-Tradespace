@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { CommuteVariation, RegionInfo, ZipValue } from "../api/client";
 import type { ColorStop, MetricDef, MetricKey, TravelMode } from "../config";
 import AboutPanel from "./AboutPanel";
@@ -55,8 +57,19 @@ export default function ControlsPanel({
   records,
   onZipChosen,
 }: Props) {
+  // Mobile-only collapse (015 R5); the toggle is display:none on desktop.
+  const [collapsed, setCollapsed] = useState(false);
   return (
-    <div className="panel">
+    <div className={`panel${collapsed ? " panel--collapsed" : ""}`}>
+      <button
+        type="button"
+        className="sheet-toggle"
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "Expand controls" : "Collapse controls"}
+        onClick={() => setCollapsed((v) => !v)}
+      >
+        {collapsed ? "▲" : "▼"}
+      </button>
       <img src="/brand/logo.png" alt="tradespace" className="panel-logo" />
 
       <div className="panel__section">

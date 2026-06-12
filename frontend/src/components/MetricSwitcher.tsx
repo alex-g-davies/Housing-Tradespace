@@ -8,7 +8,7 @@ interface Props {
 /** Segmented control to choose which metric the choropleth shades by. */
 export default function MetricSwitcher({ active, onChange }: Props) {
   return (
-    <div className="switcher" role="group" aria-label="Shade map by">
+    <div className="switcher switcher--grid" role="group" aria-label="Shade map by">
       {METRICS.map((m) => (
         <button
           key={m.key}

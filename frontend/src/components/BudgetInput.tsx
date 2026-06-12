@@ -1,13 +1,15 @@
 import type { ChangeEvent } from "react";
 
+import { formatBudgetInput } from "../lib/format";
+
 interface Props {
   budget: number;
   onChange: (budget: number) => void;
 }
 
 /**
- * Numeric budget input (R4). Emits a parsed number; non-numeric input clears
- * the budget to 0 (no filtering).
+ * Numeric budget input (R4). Displays thousands separators (015 R2) while
+ * emitting a parsed number; non-numeric input clears the budget to 0.
  */
 export default function BudgetInput({ budget, onChange }: Props) {
   function handle(e: ChangeEvent<HTMLInputElement>) {
@@ -24,8 +26,8 @@ export default function BudgetInput({ budget, onChange }: Props) {
           type="text"
           inputMode="numeric"
           aria-label="Budget in dollars"
-          placeholder="e.g. 800000"
-          value={budget > 0 ? String(budget) : ""}
+          placeholder="e.g. 800,000"
+          value={formatBudgetInput(budget)}
           onChange={handle}
         />
       </span>

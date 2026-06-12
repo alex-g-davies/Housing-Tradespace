@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   departLabel,
+  formatBudgetInput,
   formatPct,
   formatPpsf,
   formatSqMi,
@@ -42,6 +43,11 @@ describe("format", () => {
     expect(placeLabel("98335", "Gig Harbor", "WA")).toBe("Gig Harbor, WA 98335");
     expect(placeLabel("98335", "Gig Harbor")).toBe("Gig Harbor 98335");
     expect(placeLabel("98335", null, "WA")).toBe("ZIP 98335");
+  });
+
+  it("formats the budget input display (015 R2)", () => {
+    expect(formatBudgetInput(800000)).toBe("800,000");
+    expect(formatBudgetInput(0)).toBe("");
   });
 
   it("formats minute ranges, collapsing equal endpoints (013 R1)", () => {

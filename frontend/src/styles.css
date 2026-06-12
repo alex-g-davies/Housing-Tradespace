@@ -4,6 +4,10 @@
   /* 010 R5: meets 4.5:1 on white even at the smallest panel sizes. */
   --muted: #4a5462;
   --border: #e2e6ec;
+  /* Panel type scale (015 R3): pick a token, never a new literal. */
+  --fs-section: 12px; /* uppercase section labels */
+  --fs-control: 13px; /* inputs, buttons, rows, body text */
+  --fs-hint: 11px; /* hints, footnotes, attribution */
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -67,7 +71,7 @@ body,
 .section-label {
   display: block;
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-section);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -144,7 +148,7 @@ body,
 
 .panel-foot {
   margin: 14px 0 0;
-  font-size: 11px;
+  font-size: var(--fs-hint);
   color: var(--muted);
   line-height: 1.4;
 }
@@ -157,7 +161,7 @@ body,
 
 .budget-input__label {
   display: block;
-  font-size: 12px;
+  font-size: var(--fs-section);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -178,7 +182,7 @@ body,
 .budget-input__field input {
   border: none;
   outline: none;
-  font-size: 15px;
+  font-size: var(--fs-control);
   width: 100%;
   color: var(--ink);
 }
@@ -200,7 +204,7 @@ body,
 }
 
 .address__label {
-  font-size: 11px;
+  font-size: var(--fs-hint);
   color: var(--muted);
 }
 
@@ -247,7 +251,7 @@ body,
 }
 
 .address__msg {
-  font-size: 11px;
+  font-size: var(--fs-hint);
   color: var(--muted);
 }
 
@@ -311,7 +315,7 @@ body,
 }
 
 .work__label {
-  font-size: 12px;
+  font-size: var(--fs-section);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -319,13 +323,13 @@ body,
 }
 
 .work__address {
-  font-size: 13px;
+  font-size: var(--fs-control);
   color: var(--ink);
   line-height: 1.35;
 }
 
 .work__hint {
-  font-size: 11px;
+  font-size: var(--fs-hint);
   color: var(--muted);
 }
 
@@ -392,7 +396,7 @@ body,
 
 .commute__note {
   margin: 4px 0 0;
-  font-size: 11px;
+  font-size: var(--fs-hint);
   color: var(--muted);
 }
 
@@ -429,9 +433,16 @@ body,
   box-shadow: 0 1px 3px rgba(20, 30, 50, 0.14);
 }
 
+/* 2x2 grid for the metric switcher (015 R4): four labels at full legibility
+   in the 240px panel, with headroom for a fifth metric. */
+.switcher--grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
 /* Legend */
 .legend-title {
-  font-size: 12px;
+  font-size: var(--fs-section);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1095,6 +1106,11 @@ body,
   cursor: pointer;
 }
 
+/* Sheet-collapse toggles exist only on mobile (015 R5). */
+.sheet-toggle {
+  display: none;
+}
+
 /* Coarse pointers get full 44px targets (010 R5). */
 @media (pointer: coarse) {
   .switcher__btn,
@@ -1143,6 +1159,33 @@ body,
   .hint ~ .toasts,
   .hint ~ .status {
     top: 64px;
+  }
+
+  /* Sheet collapse (015 R5): either sheet shrinks to a slim handle so the
+     map owns the screen; the toggle button only exists on mobile. */
+  .sheet-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 28px;
+    margin: -6px 0 2px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .panel--collapsed,
+  .zip-detail--collapsed {
+    max-height: 56px;
+    overflow: hidden;
+  }
+
+  .panel,
+  .zip-detail {
+    transition: max-height 200ms ease;
   }
 
   /* ZIP detail (009 R8): full-width bottom sheet ABOVE the controls sheet

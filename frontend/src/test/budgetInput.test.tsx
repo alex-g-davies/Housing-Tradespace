@@ -30,4 +30,18 @@ describe("BudgetInput (R4)", () => {
     });
     expect(onChange).toHaveBeenCalledWith(0);
   });
+
+  it("displays thousands separators (015 R2)", () => {
+    render(<BudgetInput budget={800000} onChange={() => {}} />);
+    expect(screen.getByLabelText("Budget in dollars")).toHaveValue("800,000");
+  });
+
+  it("parses pasted formatted values", () => {
+    const onChange = vi.fn();
+    render(<BudgetInput budget={0} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Budget in dollars"), {
+      target: { value: "1,200,000" },
+    });
+    expect(onChange).toHaveBeenCalledWith(1200000);
+  });
 });

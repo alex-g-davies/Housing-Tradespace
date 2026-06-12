@@ -34,6 +34,11 @@ export function formatCount(value: number | null | undefined): string {
   return value == null ? "—" : value.toLocaleString("en-US");
 }
 
+/** Budget input display value: separators while typing, empty for 0 (015 R2). */
+export function formatBudgetInput(value: number): string {
+  return value > 0 ? value.toLocaleString("en-US") : "";
+}
+
 /** Affordability multiple, e.g. 6.5 -> "6.5×"; null -> "—". */
 export function formatRatio(value: number | null | undefined): string {
   return value == null ? "—" : `${value.toFixed(1)}×`;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ZipValue } from "../api/client";
 import { formatCount, formatPct, formatRatio, formatUsd, placeLabel } from "../lib/format";
@@ -154,9 +154,24 @@ export default function ZipDetailPanel({
   const comparing = pinnedZip != null && pinnedZip !== zip;
   const yoy = record?.yoy_pct ?? null;
   const [wikiExpanded, setWikiExpanded] = useState(false);
+  // Mobile-only collapse (015 R5); selecting a new ZIP re-expands.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => setCollapsed(false), [zip]);
 
   return (
-    <aside className="zip-detail" aria-label={`Details for ZIP ${zip}`}>
+    <aside
+      className={`zip-detail${collapsed ? " zip-detail--collapsed" : ""}`}
+      aria-label={`Details for ZIP ${zip}`}
+    >
+      <button
+        type="button"
+        className="sheet-toggle"
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "Expand details" : "Collapse details"}
+        onClick={() => setCollapsed((v) => !v)}
+      >
+        {collapsed ? "▲" : "▼"}
+      </button>
       <header className="zip-detail__head">
         <div>
           <h2 className="zip-detail__title">
