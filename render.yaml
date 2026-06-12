@@ -14,5 +14,8 @@ services:
         sync: false
       - key: MAPBOX_DAILY_CALL_BUDGET
         value: "2000"
+      # Dual-workplace mode (016 R7) can burst ~6 requests per interaction.
+      - key: RATE_LIMIT_UPSTREAM
+        value: 20/minute
       - key: LOG_FORMAT
         value: json

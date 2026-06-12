@@ -18,7 +18,7 @@ export interface CommuteState {
  */
 export function useCommute(
   home: LonLat | null,
-  work: WorkLocation,
+  work: WorkLocation | null,
   mode: TravelMode,
 ): CommuteState {
   const [estimate, setEstimate] = useState<CommuteEstimate | null>(null);
@@ -26,7 +26,7 @@ export function useCommute(
 
   useEffect(() => {
     setEstimate(null);
-    if (!home) {
+    if (!home || !work) {
       setLoading(false);
       return;
     }
@@ -45,7 +45,7 @@ export function useCommute(
       window.clearTimeout(t);
       setLoading(false);
     };
-  }, [home, work.lat, work.lon, mode]);
+  }, [home, work?.lat, work?.lon, mode, work]);
 
   return { estimate, loading };
 }

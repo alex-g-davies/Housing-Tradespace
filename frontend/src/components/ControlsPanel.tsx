@@ -24,11 +24,19 @@ interface Props {
   minutes: number;
   onMinutesChange: (minutes: number) => void;
   variation: CommuteVariation | null;
+  /** Dual-workplace mode (016): variation shows shared-reach areas. */
+  dual: boolean;
   mode: TravelMode;
   onModeChange: (mode: TravelMode) => void;
   onAddressLocated: (lat: number, lon: number, label: string) => void;
-  /** Reverse-geocoded nearest address for the pin (015 R1); null hides it. */
+  /** Reverse-geocoded nearest addresses per pin (015 R1); null hides a row. */
   workAddress: string | null;
+  work2Address: string | null;
+  hasWork2: boolean;
+  onAddWork2: () => void;
+  onRemoveWork2: () => void;
+  searchTarget: "A" | "B";
+  onSearchTargetChange: (target: "A" | "B") => void;
   /** Bias point for address search — the selected region's center. */
   searchProximity: { lat: number; lon: number } | null;
   records: Map<string, ZipValue>;
@@ -49,10 +57,17 @@ export default function ControlsPanel({
   minutes,
   onMinutesChange,
   variation,
+  dual,
   mode,
   onModeChange,
   onAddressLocated,
   workAddress,
+  work2Address,
+  hasWork2,
+  onAddWork2,
+  onRemoveWork2,
+  searchTarget,
+  onSearchTargetChange,
   searchProximity,
   records,
   onZipChosen,
@@ -80,10 +95,43 @@ export default function ControlsPanel({
       </div>
 
       <div className="panel__section work">
-        <span className="work__label">Work location</span>
-        <AddressSearch onLocated={onAddressLocated} proximity={searchProximity} />
-        {workAddress && <span className="work__address">📍 {workAddress}</span>}
-        <span className="work__hint">Drag the pin to move it, or search an address</span>
+        <span className="work__label">{hasWork2 ? "Work locations" : "Work location"}</span>
+        <AddressSearch
+          onLocated={onAddressLocated}
+          proximity={searchProximity}
+          target={hasWork2 ? searchTarget : null}
+          onTargetChange={onSearchTargetChange}
+        />
+        {workAddress && (
+          <span className="work__address">
+            {hasWork2 ? "🅰 " : "📍 "}
+            {workAddress}
+          </span>
+        )}
+        {hasWork2 && (
+          <span className="work__address">
+            {"🅱 "}
+            {work2Address ?? "Drag pin B into place"}
+            <button
+              type="button"
+              className="work__remove"
+              aria-label="Remove second workplace"
+              onClick={onRemoveWork2}
+            >
+              ×
+            </button>
+          </span>
+        )}
+        {!hasWork2 && (
+          <button type="button" className="work__add" onClick={onAddWork2}>
+            + Add second workplace
+          </button>
+        )}
+        <span className="work__hint">
+          {hasWork2
+            ? "Drag a pin to move it — the map shows where BOTH can commute"
+            : "Drag the pin to move it, or search an address"}
+        </span>
       </div>
 
       <div className="panel__section">
@@ -91,6 +139,7 @@ export default function ControlsPanel({
           minutes={minutes}
           onMinutesChange={onMinutesChange}
           variation={variation}
+          dual={dual}
           mode={mode}
           onModeChange={onModeChange}
         />

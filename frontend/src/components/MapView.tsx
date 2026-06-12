@@ -29,6 +29,11 @@ interface Props {
   budget: number;
   work: WorkLocation;
   onWorkChange: (lat: number, lon: number) => void;
+  /** Second workplace (016 R1); null = single-pin mode. */
+  work2: WorkLocation | null;
+  onWork2Change: (lat: number, lon: number) => void;
+  /** Per-pin outermost bands shown as faint dashed context rings (016 R3). */
+  contextOutlines: FeatureCollection | null;
   /** Increment to fly the map to the current work location (address / reset). */
   recenterSignal: number;
   /** Region bounds to fit when the selected state changes (national). */
@@ -54,6 +59,23 @@ const ZIP_FILL = "zip-fill";
 const ISO_LINE = "iso-line";
 const ZIP_SELECTED = "zip-selected";
 const ZIP_PINNED = "zip-pinned";
+const CTX_SOURCE = "iso-context";
+const CTX_LINE = "iso-context-line";
+
+/** Brand-badge pin element with an A/B label (016 R1). */
+function makePinElement(label: string): { el: HTMLDivElement; badge: HTMLSpanElement } {
+  const el = document.createElement("div");
+  el.className = "work-pin-wrap";
+  const img = document.createElement("img");
+  img.src = "/brand/mark-512.png";
+  img.alt = `Work location ${label}`;
+  img.className = "work-pin";
+  const badge = document.createElement("span");
+  badge.className = "work-pin__badge";
+  badge.textContent = label;
+  el.append(img, badge);
+  return { el, badge };
+}
 
 /** Filter matching exactly one ZIP (or nothing, for null). */
 function zipFilter(zip: string | null): maplibregl.FilterSpecification {
@@ -89,6 +111,9 @@ export default function MapView({
   budget,
   work,
   onWorkChange,
+  work2,
+  onWork2Change,
+  contextOutlines,
   recenterSignal,
   fitBbox,
   fitInitialBounds,
@@ -103,6 +128,8 @@ export default function MapView({
   const map = useRef<maplibregl.Map | null>(null);
   const loaded = useRef(false);
   const marker = useRef<maplibregl.Marker | null>(null);
+  const marker2 = useRef<maplibregl.Marker | null>(null);
+  const badgeA = useRef<HTMLSpanElement | null>(null);
   const infoPopup = useRef<maplibregl.Popup | null>(null);
 
   // Keep the latest props in refs so the sync functions — which may be invoked
@@ -111,6 +138,8 @@ export default function MapView({
   // finishes loading is dropped and the choropleth never renders.
   const onWorkChangeRef = useRef(onWorkChange);
   onWorkChangeRef.current = onWorkChange;
+  const onWork2ChangeRef = useRef(onWork2Change);
+  onWork2ChangeRef.current = onWork2Change;
   const workRef = useRef(work);
   workRef.current = work;
   const geojsonRef = useRef(geojson);
@@ -157,11 +186,11 @@ export default function MapView({
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
     // Draggable work-location pin — the brand shield in a circular badge, so
-    // the marker reads as part of the product, not a stock teardrop.
-    const pinEl = document.createElement("img");
-    pinEl.src = "/brand/mark-512.png";
-    pinEl.alt = "Work location";
-    pinEl.className = "work-pin";
+    // the marker reads as part of the product, not a stock teardrop. The "A"
+    // label only shows while a second pin exists (016 R1).
+    const { el: pinEl, badge } = makePinElement("A");
+    badgeA.current = badge;
+    badge.style.display = "none";
     const pin = new maplibregl.Marker({ element: pinEl, draggable: true, anchor: "center" })
       .setLngLat([workRef.current.lon, workRef.current.lat])
       .setPopup(new maplibregl.Popup({ closeButton: false, offset: 22 }).setText("Work location"))
@@ -204,6 +233,7 @@ export default function MapView({
       loaded.current = true;
       syncZips();
       syncIsochrone();
+      syncContext();
     });
     map.current = m;
     return () => {
@@ -306,9 +336,69 @@ export default function MapView({
     );
   }
 
+  // Dual-mode context rings (016 R3): each pin's outer reach, faint + dashed.
+  const contextRef = useRef(contextOutlines);
+  contextRef.current = contextOutlines;
+  function syncContext() {
+    const m = map.current;
+    if (!m || !loaded.current) return;
+    const data = contextRef.current;
+    const existing = m.getSource(CTX_SOURCE) as maplibregl.GeoJSONSource | undefined;
+    const emptyFc = { type: "FeatureCollection", features: [] };
+    if (existing) {
+      existing.setData((data ?? emptyFc) as never);
+      return;
+    }
+    if (!data) return;
+    m.addSource(CTX_SOURCE, { type: "geojson", data: data as never });
+    m.addLayer(
+      {
+        id: CTX_LINE,
+        type: "line",
+        source: CTX_SOURCE,
+        paint: {
+          "line-color": "#6b7686",
+          "line-width": 1.5,
+          "line-opacity": 0.35,
+          "line-dasharray": [2, 2],
+        },
+      },
+      firstSymbolLayerId(m),
+    );
+  }
+
+  // Second work pin (016 R1): created/removed as work2 toggles.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    if (badgeA.current) badgeA.current.style.display = work2 ? "" : "none";
+    if (!work2) {
+      marker2.current?.remove();
+      marker2.current = null;
+      return;
+    }
+    if (!marker2.current) {
+      const { el } = makePinElement("B");
+      const pin = new maplibregl.Marker({ element: el, draggable: true, anchor: "center" })
+        .setLngLat([work2.lon, work2.lat])
+        .setPopup(
+          new maplibregl.Popup({ closeButton: false, offset: 22 }).setText("Work location B"),
+        )
+        .addTo(m);
+      pin.on("dragend", () => {
+        const p = pin.getLngLat();
+        onWork2ChangeRef.current(p.lat, p.lng);
+      });
+      marker2.current = pin;
+    } else {
+      marker2.current.setLngLat([work2.lon, work2.lat]);
+    }
+  }, [work2]);
+
   // Re-sync layers when data arrives.
   useEffect(syncZips, [geojson]);
   useEffect(syncIsochrone, [isochrone]);
+  useEffect(syncContext, [contextOutlines]);
 
   // Track selection/pin changes on the outline layers.
   useEffect(() => {

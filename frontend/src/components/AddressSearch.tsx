@@ -7,13 +7,16 @@ interface Props {
   onLocated: (lat: number, lon: number, label: string) => void;
   /** Bias point for the search — the selected region's center (010 R3). */
   proximity: { lat: number; lon: number } | null;
+  /** Which pin the search moves (016 R1); null hides the toggle (single mode). */
+  target?: "A" | "B" | null;
+  onTargetChange?: (target: "A" | "B") => void;
 }
 
 type Status = "idle" | "loading" | "error" | "ok";
 
 /** Free-text address search that geocodes via the backend and moves the work
  * location to the result. */
-export default function AddressSearch({ onLocated, proximity }: Props) {
+export default function AddressSearch({ onLocated, proximity, target, onTargetChange }: Props) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [msg, setMsg] = useState("");
@@ -45,6 +48,23 @@ export default function AddressSearch({ onLocated, proximity }: Props) {
         Find a work address
       </label>
       <div className="address__row">
+        {target != null && onTargetChange && (
+          <div className="switcher address__target" role="group" aria-label="Search target pin">
+            {(["A", "B"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={
+                  t === target ? "switcher__btn switcher__btn--active" : "switcher__btn"
+                }
+                aria-pressed={t === target}
+                onClick={() => onTargetChange(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
         <input
           id="address-input"
           className="address__input"

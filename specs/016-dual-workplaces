@@ -1,0 +1,84 @@
+# Spec 016 — Dual Workplaces: Shared Commute Intersection
+
+Status: Draft
+Owner: <you>
+Related: 003/013 (band machinery + modes), 004 (hardening unchanged —
+per-pin endpoints), 009 R5 (URL state), 015 R1 (per-pin address labels)
+
+## Overview
+
+Two-worker households don't ask "what can I reach from work" — they ask
+"where can BOTH of us live." This spec adds a second work pin: each
+location's reach is fetched independently (server caches stay per-pin), the
+client intersects matching scenario bands, and the map shows only the area
+inside BOTH commutes, with each pin's full reach kept as a faint dashed
+context ring. The detail panel shows commute estimates to both workplaces.
+
+## Requirements
+
+- **R1 — Second pin.** An "Add second workplace" control creates pin B
+  (draggable, A/B badges on both pins while dual); pin B is removable;
+  switching states removes it. Address search gains an A/B target toggle,
+  visible only in dual mode. Each pin shows its reverse-geocoded address
+  (015 R1) in the work section.
+- **R2 — Intersection rendering.** Per-pin isochrones are fetched through
+  the existing per-location endpoint and intersected client-side by
+  matching scenario (offpeak∩offpeak, typical∩typical, peak∩peak for
+  drive; single∩single for walk/cycle). The intersection renders with the
+  standard band styling; the reach line in the detail panel evaluates
+  against the intersection.
+- **R3 — Context + empty state.** Each pin's outermost band renders as a
+  faint dashed outline for context. When no band survives the
+  intersection, a visible message says so ("No area within both commutes —
+  try a longer time or move a pin").
+- **R4 — Dual commute estimates.** Selecting a ZIP shows estimate blocks
+  for Work A and Work B (compact form — no departure-window parentheticals
+  in dual mode). Single-pin display is unchanged.
+- **R5 — Shared-reach areas.** In dual mode the traffic-scenarios fold
+  shows the intersection band areas (client-computed) labeled as shared
+  reach, with the shrink percentage recomputed from them; per-pin upstream
+  areas are hidden.
+- **R6 — URL state.** `lat2`/`lon2` (both-or-neither, validated, 4 dp)
+  round-trip pin B through shared URLs, composing with 009 R5; any param
+  still skips geolocation.
+- **R7 — Hardening unchanged.** All upstream traffic flows through the
+  existing per-location endpoints with their snap/cache/budget/rate-limit
+  invariants. Dual mode roughly doubles per-interaction request counts;
+  `RATE_LIMIT_UPSTREAM` is raised to 20/minute via env (render.yaml).
+
+## Non-functional / Constraints
+
+- Intersection via modular turf packages (`@turf/intersect`, `@turf/area`,
+  `@turf/helpers` — sanctioned by the project stack; ~15 kB gz total;
+  never the metapackage).
+- Shared minutes/mode across both pins. Cost (24 h caches): dual drive ZIP
+  selection = 12 calls; worst realistic dual session ≈ 12% of the daily
+  budget — no budget change.
+
+## Acceptance Criteria
+
+- [ ] Add pin B across town: bands shrink to the shared area in standard
+      styling, dashed rings show each pin's own reach; remove B → single
+      mode restored exactly.
+- [ ] Drag pins apart until nothing overlaps → the empty-intersection
+      message appears; bands return when they overlap again.
+- [ ] Selected ZIP shows compact A and B estimate blocks; reach line
+      reflects the intersection; logs show 12 drive calls per fresh ZIP.
+- [ ] Scenarios fold shows shared-reach mi² + recomputed shrink in dual
+      mode; per-pin numbers absent.
+- [ ] `?lat=…&lon=…&lat2=…&lon2=…` reproduces dual mode in a fresh tab; a
+      lone `lat2` is ignored.
+- [ ] `pytest` and `npm run test` green incl. the intersection lib tests;
+      bundle delta noted (~15 kB gz).
+
+## Out of Scope (explicit)
+
+- More than two workplaces; per-pin minutes/mode (future work).
+- Server-side intersection (would square cache cardinality).
+- Sharing pin labels/names beyond A/B.
+
+## Verification notes
+
+R1/R3 → manual dual walk; R2/R5 → intersect.test.ts + visual; R4 → panel
+tests + budget-log check; R6 → deep-link walk. The human verifies; the
+implementing agent does not self-certify done.

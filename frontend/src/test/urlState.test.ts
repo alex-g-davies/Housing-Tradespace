@@ -8,6 +8,7 @@ const DEFAULTS = {
   zip: null,
   budget: 0,
   work: DEFAULT_WORK,
+  work2: null,
   minutes: DEFAULT_MINUTES,
   metric: "value" as const,
   tmode: "drive" as const,
@@ -20,6 +21,7 @@ describe("urlState (009 R5)", () => {
       zip: "80302",
       budget: 600000,
       work: { lat: 39.7392, lon: -104.9903 },
+      work2: { lat: 39.9, lon: -105.1 },
       minutes: 45,
       metric: "yoy" as const,
       tmode: "walk" as const,
@@ -33,6 +35,12 @@ describe("urlState (009 R5)", () => {
     expect(parsed.minutes).toBe(45);
     expect(parsed.metric).toBe("yoy");
     expect(parsed.tmode).toBe("walk");
+    expect(parsed.work2).toEqual({ lat: 39.9, lon: -105.1 });
+  });
+
+  it("requires lat2 and lon2 together (016 R6)", () => {
+    expect(parseAppUrl("?lat2=39.9").work2).toBeUndefined();
+    expect(parseAppUrl("?lon2=-105.1").work2).toBeUndefined();
   });
 
   it("serializes defaults to an empty string", () => {

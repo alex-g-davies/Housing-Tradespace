@@ -6,6 +6,8 @@ interface Props {
   minutes: number;
   onMinutesChange: (minutes: number) => void;
   variation: CommuteVariation | null;
+  /** Dual-workplace mode (016 R5): areas are the shared-reach intersection. */
+  dual: boolean;
   mode: TravelMode;
   onModeChange: (mode: TravelMode) => void;
 }
@@ -16,6 +18,7 @@ export default function CommuteControl({
   minutes,
   onMinutesChange,
   variation,
+  dual,
   mode,
   onModeChange,
 }: Props) {
@@ -57,7 +60,7 @@ export default function CommuteControl({
           is time-invariant and renders as a single contour. */}
       {mode !== "drive" ? null : (
       <details className="panel-fold" open>
-        <summary>Traffic scenarios</summary>
+        <summary>{dual ? "Shared reach (both commutes)" : "Traffic scenarios"}</summary>
         <ul className="scenarios">
           {SCENARIO_STYLES.map((s) => (
             <li key={s.key} className="scenarios__row">

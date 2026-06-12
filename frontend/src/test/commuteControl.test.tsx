@@ -17,6 +17,7 @@ function renderControl(overrides: Partial<Parameters<typeof CommuteControl>[0]> 
     minutes: 30,
     onMinutesChange: vi.fn(),
     variation: variation as CommuteVariation | null,
+    dual: false,
     mode: "drive" as const,
     onModeChange: vi.fn(),
     ...overrides,
@@ -59,11 +60,17 @@ describe("CommuteControl (003/013)", () => {
         minutes={30}
         onMinutesChange={() => {}}
         variation={null}
+        dual={false}
         mode="walk"
         onModeChange={() => {}}
       />,
     );
     expect(container.querySelector("details")).toBeNull();
+  });
+
+  it("titles the fold as shared reach in dual mode (016 R5)", () => {
+    renderControl({ dual: true });
+    expect(screen.getByText("Shared reach (both commutes)")).toBeInTheDocument();
   });
 
   it("starts with the traffic-scenarios fold expanded for drive", () => {

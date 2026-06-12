@@ -20,6 +20,8 @@ export interface UrlState {
   zip?: string;
   budget?: number;
   work?: WorkLocation;
+  /** Second workplace (016 R6). */
+  work2?: WorkLocation;
   minutes?: number;
   metric?: MetricKey;
   tmode?: TravelMode;
@@ -53,6 +55,19 @@ export function parseAppUrl(search: string): UrlState {
     out.work = { lat, lon };
   }
 
+  const lat2 = Number(params.get("lat2"));
+  const lon2 = Number(params.get("lon2"));
+  if (
+    params.has("lat2") &&
+    params.has("lon2") &&
+    Number.isFinite(lat2) &&
+    Number.isFinite(lon2) &&
+    Math.abs(lat2) <= 90 &&
+    Math.abs(lon2) <= 180
+  ) {
+    out.work2 = { lat: lat2, lon: lon2 };
+  }
+
   const minutes = Number(params.get("min"));
   if ((COMMUTE_STEPS as readonly number[]).includes(minutes)) out.minutes = minutes;
 
@@ -70,6 +85,7 @@ export interface AppUrlInput {
   zip: string | null;
   budget: number;
   work: WorkLocation;
+  work2: WorkLocation | null;
   minutes: number;
   metric: MetricKey;
   tmode: TravelMode;
@@ -84,6 +100,10 @@ export function serializeAppUrl(s: AppUrlInput): string {
   if (s.work.lat !== DEFAULT_WORK.lat || s.work.lon !== DEFAULT_WORK.lon) {
     params.set("lat", s.work.lat.toFixed(4));
     params.set("lon", s.work.lon.toFixed(4));
+  }
+  if (s.work2) {
+    params.set("lat2", s.work2.lat.toFixed(4));
+    params.set("lon2", s.work2.lon.toFixed(4));
   }
   if (s.minutes !== DEFAULT_MINUTES) params.set("min", String(s.minutes));
   if (s.metric !== METRICS[0].key) params.set("metric", s.metric);

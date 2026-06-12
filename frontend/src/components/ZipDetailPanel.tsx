@@ -16,6 +16,9 @@ export interface ZipContext {
   /** Routed drive-time lines (011 R3); null while loading or unavailable. */
   driveToWork: string | null;
   driveHome: string | null;
+  /** Second-workplace lines (016 R4); null in single-pin mode. */
+  driveToWork2: string | null;
+  driveHome2: string | null;
 }
 
 interface Props {
@@ -242,6 +245,16 @@ export default function ZipDetailPanel({
             {context.driveHome && (
               <p className="zip-detail__drive">
                 <strong>{context.driveHome}</strong>
+              </p>
+            )}
+            {context.driveToWork2 && (
+              <p className="zip-detail__drive">
+                <strong>{context.driveToWork2}</strong>
+              </p>
+            )}
+            {context.driveHome2 && (
+              <p className="zip-detail__drive">
+                <strong>{context.driveHome2}</strong>
               </p>
             )}
             {context.percentile != null && (

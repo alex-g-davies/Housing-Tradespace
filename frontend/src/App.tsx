@@ -19,12 +19,14 @@ import {
 } from "./config";
 import { useCommute } from "./hooks/useCommute";
 import { useGeolocate } from "./hooks/useGeolocate";
+import { NOTICE_ISOCHRONE, useIsochrone } from "./hooks/useIsochrone";
 import { useReverseGeocode } from "./hooks/useReverseGeocode";
 import { useMapData } from "./hooks/useMapData";
 import { useWikiSummary } from "./hooks/useWikiSummary";
 import { metricValuesFromFeatures, resolveStops } from "./lib/colorScale";
 import { departLabel, rangeLabel } from "./lib/format";
 import { centroidsByZip, scenariosContaining } from "./lib/geo";
+import { intersectIsochrones, outermostBand } from "./lib/intersect";
 import { regionForPoint } from "./lib/locateRegion";
 import { parseAppUrl, serializeAppUrl } from "./lib/urlState";
 import { deltaPct, percentileRank, stateMedian } from "./lib/zipStats";
@@ -43,6 +45,10 @@ export default function App() {
   const [minutes, setMinutes] = useState<number>(INITIAL_URL.minutes ?? DEFAULT_MINUTES);
   const [mode, setMode] = useState<TravelMode>(INITIAL_URL.tmode ?? DEFAULT_MODE);
   const [work, setWork] = useState<WorkLocation>(INITIAL_URL.work ?? DEFAULT_WORK);
+  // Second workplace (016): null = single-pin mode.
+  const [work2, setWork2] = useState<WorkLocation | null>(INITIAL_URL.work2 ?? null);
+  // Which pin the address search moves (only relevant in dual mode).
+  const [searchTarget, setSearchTarget] = useState<"A" | "B">("A");
   const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [stateCode, setStateCode] = useState<string>(INITIAL_URL.state ?? DEFAULT_STATE);
   // Bumped on programmatic work moves (address / reset) so the map flies there.
@@ -63,12 +69,31 @@ export default function App() {
   const geoFix = useGeolocate(GEOLOCATE);
 
   const activeMetric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
-  const { geojson, isochrone, records, loading, isoLoading, error, notices } = useMapData(
-    stateCode,
-    work,
-    minutes,
-    mode,
+  const { geojson, records, loading, error, notices } = useMapData(stateCode);
+
+  // Per-pin reach overlays (016 R2); server caches stay per-location.
+  const iso1 = useIsochrone(work, minutes, mode);
+  const iso2 = useIsochrone(work2, minutes, mode);
+  const isoLoading = iso1.loading || iso2.loading;
+  const dual = work2 != null;
+
+  // Where BOTH can commute: matching scenario bands intersected client-side.
+  const intersection = useMemo(
+    () =>
+      dual && iso1.isochrone && iso2.isochrone
+        ? intersectIsochrones(iso1.isochrone, iso2.isochrone)
+        : null,
+    [dual, iso1.isochrone, iso2.isochrone],
   );
+  const isochrone = dual ? (intersection?.collection ?? null) : iso1.isochrone;
+  // Each pin's full outer reach as faint context rings (016 R3).
+  const contextOutlines = useMemo(() => {
+    if (!dual || !iso1.isochrone || !iso2.isochrone) return null;
+    const bands = [outermostBand(iso1.isochrone), outermostBand(iso2.isochrone)].filter(
+      (f): f is NonNullable<typeof f> => f != null,
+    );
+    return bands.length ? { type: "FeatureCollection" as const, features: bands } : null;
+  }, [dual, iso1.isochrone, iso2.isochrone]);
 
   const [regionsFailed, setRegionsFailed] = useState(false);
   useEffect(() => {
@@ -99,19 +124,29 @@ export default function App() {
     return resolveStops(activeMetric, values);
   }, [records, geojson, activeMetric]);
 
-  const variation =
-    (isochrone as { properties?: { variation?: CommuteVariation } } | null)?.properties
-      ?.variation ?? null;
+  // Single-pin: the backend's variation summary. Dual: client-computed
+  // shared-reach areas (016 R5).
+  const variation = dual
+    ? (intersection?.variation ?? null)
+    : ((iso1.isochrone as { properties?: { variation?: CommuteVariation } } | null)?.properties
+        ?.variation ?? null);
 
   // One centroid per ZIP (009): commute-reach check now, fly-to targets later.
   const centroids = useMemo(() => centroidsByZip(geojson), [geojson]);
 
-  // Routed AM/PM commute estimates for the selected ZIP (013) — best-effort.
-  const { estimate: commute, loading: commuteLoading } = useCommute(
-    selectedZip ? (centroids.get(selectedZip) ?? null) : null,
+  // Routed commute estimates for the selected ZIP (013; per-pin in 016).
+  const selectedCentroid = selectedZip ? (centroids.get(selectedZip) ?? null) : null;
+  const { estimate: commute, loading: commuteALoading } = useCommute(
+    selectedCentroid,
     work,
     mode,
   );
+  const { estimate: commuteB, loading: commuteBLoading } = useCommute(
+    selectedCentroid,
+    work2,
+    mode,
+  );
+  const commuteLoading = commuteALoading || commuteBLoading;
 
   // Wikipedia summary of the selected place (012 R3) — best-effort.
   const wiki = useWikiSummary(
@@ -127,6 +162,8 @@ export default function App() {
       commuteReach: null,
       driveToWork: null,
       driveHome: null,
+      driveToWork2: null,
+      driveHome2: null,
     };
     if (!selectedZip) return empty;
     const record = records.get(selectedZip);
@@ -147,31 +184,40 @@ export default function App() {
         ? `Within a ${minutes}-min drive of work in typical ${best.label.toLowerCase()} — bad days run longer`
         : `Beyond a ${minutes}-min drive of work in typical traffic`;
     }
-    // Mode-aware estimate lines (013 R3): ranges + windows for drive,
-    // single un-timed durations for walk/cycle.
+    // Mode-aware estimate lines (013 R3; compact A/B form in dual, 016 R4).
     const verb = { drive: "Drive", walk: "Walk", cycle: "Cycle" }[mode];
-    let driveToWork: string | null = null;
-    let driveHome: string | null = null;
-    if (commute) {
-      const amRange = rangeLabel(commute.am_min_minutes, commute.am_max_minutes);
-      const pmRange = rangeLabel(commute.pm_min_minutes, commute.pm_max_minutes);
-      const amWindow =
-        commute.am_window_start_local && commute.am_window_end_local
-          ? ` (departing ${departLabel(commute.am_window_start_local)}–${departLabel(
-              commute.am_window_end_local,
-            ).replace(/^\w+ /, "")})`
-          : "";
-      const pmWindow =
-        commute.pm_window_start_local && commute.pm_window_end_local
-          ? ` (departing ${departLabel(commute.pm_window_start_local)}–${departLabel(
-              commute.pm_window_end_local,
-            ).replace(/^\w+ /, "")})`
-          : "";
-      driveToWork = `${verb} to work: ${amRange}${amWindow}`;
-      driveHome = `${verb} home: ${pmRange}${pmWindow}`;
-    }
-    return { percentile, vsStateMedianPct, commuteReach, driveToWork, driveHome };
-  }, [selectedZip, records, centroids, isochrone, minutes, commute, mode]);
+    const window = (start: string | null, end: string | null) =>
+      !dual && start && end
+        ? ` (departing ${departLabel(start)}–${departLabel(end).replace(/^\w+ /, "")})`
+        : "";
+    const lines = (
+      est: typeof commute,
+      workLabel: string,
+    ): [string | null, string | null] => {
+      if (!est) return [null, null];
+      return [
+        `${verb} to ${workLabel}: ${rangeLabel(est.am_min_minutes, est.am_max_minutes)}${window(
+          est.am_window_start_local,
+          est.am_window_end_local,
+        )}`,
+        `${verb} home: ${rangeLabel(est.pm_min_minutes, est.pm_max_minutes)}${window(
+          est.pm_window_start_local,
+          est.pm_window_end_local,
+        )}`,
+      ];
+    };
+    const [driveToWork, driveHome] = lines(commute, dual ? "Work A" : "work");
+    const [driveToWork2, driveHome2] = dual ? lines(commuteB, "Work B") : [null, null];
+    return {
+      percentile,
+      vsStateMedianPct,
+      commuteReach,
+      driveToWork,
+      driveHome,
+      driveToWork2,
+      driveHome2,
+    };
+  }, [selectedZip, records, centroids, isochrone, minutes, commute, commuteB, mode, dual]);
 
   // Esc closes the detail panel (009 R1).
   useEffect(() => {
@@ -229,6 +275,7 @@ export default function App() {
         zip: selectedZip,
         budget,
         work,
+        work2,
         minutes,
         metric: metricKey,
         tmode: mode,
@@ -236,25 +283,53 @@ export default function App() {
       window.history.replaceState(null, "", `${window.location.pathname}${qs}`);
     }, 300);
     return () => window.clearTimeout(t);
-  }, [stateCode, selectedZip, budget, work, minutes, metricKey, mode]);
+  }, [stateCode, selectedZip, budget, work, work2, minutes, metricKey, mode]);
 
-  // Seed label for the pin-address line (015 R1): an address search already
+  // Seed labels for the pin-address lines (015 R1): an address search already
   // knows its place_name — show it instantly; drags clear it so the reverse
   // lookup takes over.
   const [workSeed, setWorkSeed] = useState<string | null>(null);
+  const [work2Seed, setWork2Seed] = useState<string | null>(null);
   const handleWorkDrag = useCallback((lat: number, lon: number) => {
     userTouchedRef.current = true;
     setWork({ lat, lon });
     setWorkSeed(null);
   }, []);
-  const handleAddressLocated = useCallback((lat: number, lon: number, label: string) => {
+  const handleWork2Drag = useCallback((lat: number, lon: number) => {
     userTouchedRef.current = true;
-    setWork({ lat, lon });
-    setWorkSeed(label);
-    setRecenter((n) => n + 1);
+    setWork2({ lat, lon });
+    setWork2Seed(null);
+  }, []);
+  const handleAddressLocated = useCallback(
+    (lat: number, lon: number, label: string) => {
+      userTouchedRef.current = true;
+      if (searchTarget === "B" && work2 != null) {
+        setWork2({ lat, lon });
+        setWork2Seed(label);
+      } else {
+        setWork({ lat, lon });
+        setWorkSeed(label);
+      }
+      setRecenter((n) => n + 1);
+    },
+    [searchTarget, work2],
+  );
+
+  // Second-pin lifecycle (016 R1): spawn near pin A, remove resets to single.
+  const handleAddWork2 = useCallback(() => {
+    userTouchedRef.current = true;
+    setWork2({ lat: work.lat, lon: work.lon + 0.02 });
+    setWork2Seed(null);
+    setSearchTarget("B");
+  }, [work]);
+  const handleRemoveWork2 = useCallback(() => {
+    setWork2(null);
+    setWork2Seed(null);
+    setSearchTarget("A");
   }, []);
 
   const workAddress = useReverseGeocode(work.lat, work.lon, workSeed);
+  const work2Address = useReverseGeocode(work2?.lat ?? null, work2?.lon ?? null, work2Seed);
 
   const handleStateChange = useCallback(
     (code: string) => {
@@ -262,6 +337,8 @@ export default function App() {
       setStateCode(code);
       setSelectedZip(null); // records are per-state; stale selections are meaningless
       setPinnedZip(null);
+      setWork2(null); // a cross-state second pin is meaningless
+      setSearchTarget("A");
       const r = regions.find((x) => x.code === code);
       if (r?.center) setWork({ lat: r.center[1], lon: r.center[0] });
     },
@@ -280,6 +357,9 @@ export default function App() {
         budget={budget}
         work={work}
         onWorkChange={handleWorkDrag}
+        work2={work2}
+        onWork2Change={handleWork2Drag}
+        contextOutlines={contextOutlines}
         recenterSignal={recenter}
         fitBbox={region?.bbox ?? null}
         fitInitialBounds={INITIAL_URL.state != null && INITIAL_URL.zip == null}
@@ -320,10 +400,17 @@ export default function App() {
         minutes={minutes}
         onMinutesChange={setMinutes}
         variation={variation}
+        dual={dual}
         mode={mode}
         onModeChange={setMode}
         onAddressLocated={handleAddressLocated}
         workAddress={workAddress}
+        work2Address={work2Address}
+        hasWork2={dual}
+        onAddWork2={handleAddWork2}
+        onRemoveWork2={handleRemoveWork2}
+        searchTarget={searchTarget}
+        onSearchTargetChange={setSearchTarget}
         searchProximity={region?.center ? { lat: region.center[1], lon: region.center[0] } : null}
         records={records}
         onZipChosen={selectZipAndFly}
@@ -338,10 +425,16 @@ export default function App() {
         ⌖
       </button>
       {isoLoading && <div className="iso-chip">Updating reach…</div>}
+      {dual && intersection?.empty && !isoLoading && (
+        <div className="status status--warn iso-empty">
+          No area within both commutes — try a longer time or move a pin
+        </div>
+      )}
       <Onboarding />
       <Toasts
         messages={[
           ...notices,
+          ...(iso1.failed || iso2.failed ? [NOTICE_ISOCHRONE] : []),
           ...(regionsFailed ? [`Region list unavailable — showing ${stateCode} only`] : []),
         ]}
       />

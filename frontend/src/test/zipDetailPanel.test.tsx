@@ -39,6 +39,8 @@ const CONTEXT: ZipContext = {
   commuteReach: "Within a 30-min drive of work in typical midday — bad days run longer",
   driveToWork: "Drive to work: ~52 min (Mon 8:00 AM)",
   driveHome: "Drive home: ~64 min (Mon 5:30 PM)",
+  driveToWork2: null,
+  driveHome2: null,
 };
 
 const EMPTY_CONTEXT: ZipContext = {
@@ -47,6 +49,8 @@ const EMPTY_CONTEXT: ZipContext = {
   commuteReach: null,
   driveToWork: null,
   driveHome: null,
+  driveToWork2: null,
+  driveHome2: null,
 };
 
 function renderPanel(overrides: Partial<Parameters<typeof ZipDetailPanel>[0]> = {}) {
