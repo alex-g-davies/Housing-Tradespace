@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Feature, FeatureCollection } from "geojson";
 
-import { intersectIsochrones, outermostBand } from "../lib/intersect";
+import { intersectIsochrones } from "../lib/intersect";
 
 function band(scenario: string, coords: number[][][], label = scenario): Feature {
   return {
@@ -88,11 +88,5 @@ describe("intersectIsochrones (016 R2/R5)", () => {
     const out = intersectIsochrones(fc(band("typical", SQ_A)), fc(band("typical", SQ_B)));
     expect(out.collection.features).toHaveLength(1);
     expect(out.variation).toBeNull();
-  });
-
-  it("outermostBand returns the first (outer) band", () => {
-    const a = fc(band("offpeak", SQ_A), band("peak", SQ_B));
-    expect(outermostBand(a)?.properties?.scenario).toBe("offpeak");
-    expect(outermostBand(fc())).toBeNull();
   });
 });

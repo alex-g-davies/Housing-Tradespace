@@ -26,7 +26,7 @@ import { useWikiSummary } from "./hooks/useWikiSummary";
 import { metricValuesFromFeatures, resolveStops } from "./lib/colorScale";
 import { departLabel, rangeLabel } from "./lib/format";
 import { centroidsByZip, scenariosContaining } from "./lib/geo";
-import { intersectIsochrones, outermostBand } from "./lib/intersect";
+import { intersectIsochrones } from "./lib/intersect";
 import { regionForPoint } from "./lib/locateRegion";
 import { parseAppUrl, serializeAppUrl } from "./lib/urlState";
 import { deltaPct, percentileRank, stateMedian } from "./lib/zipStats";
@@ -85,15 +85,9 @@ export default function App() {
         : null,
     [dual, iso1.isochrone, iso2.isochrone],
   );
+  // Dual mode shows the intersection ONLY (user direction, 016 fix): no
+  // per-pin context rings — the empty-intersection message covers "if any".
   const isochrone = dual ? (intersection?.collection ?? null) : iso1.isochrone;
-  // Each pin's full outer reach as faint context rings (016 R3).
-  const contextOutlines = useMemo(() => {
-    if (!dual || !iso1.isochrone || !iso2.isochrone) return null;
-    const bands = [outermostBand(iso1.isochrone), outermostBand(iso2.isochrone)].filter(
-      (f): f is NonNullable<typeof f> => f != null,
-    );
-    return bands.length ? { type: "FeatureCollection" as const, features: bands } : null;
-  }, [dual, iso1.isochrone, iso2.isochrone]);
 
   const [regionsFailed, setRegionsFailed] = useState(false);
   useEffect(() => {
@@ -359,7 +353,6 @@ export default function App() {
         onWorkChange={handleWorkDrag}
         work2={work2}
         onWork2Change={handleWork2Drag}
-        contextOutlines={contextOutlines}
         recenterSignal={recenter}
         fitBbox={region?.bbox ?? null}
         fitInitialBounds={INITIAL_URL.state != null && INITIAL_URL.zip == null}

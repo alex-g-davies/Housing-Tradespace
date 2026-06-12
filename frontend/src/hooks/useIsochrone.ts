@@ -34,6 +34,10 @@ export function useIsochrone(
       return;
     }
     let cancelled = false;
+    // Clear the previous contour up front (016 fix): a stale contour from a
+    // prior position would poison the dual-pin intersection if this fetch
+    // fails (e.g. rate-limited drag burst). The map chip covers the gap.
+    setIsochrone(null);
     setLoading(true);
     getIsochrone(work.lat, work.lon, minutes, mode)
       .then((fc) => {

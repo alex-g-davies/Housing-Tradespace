@@ -32,8 +32,6 @@ interface Props {
   /** Second workplace (016 R1); null = single-pin mode. */
   work2: WorkLocation | null;
   onWork2Change: (lat: number, lon: number) => void;
-  /** Per-pin outermost bands shown as faint dashed context rings (016 R3). */
-  contextOutlines: FeatureCollection | null;
   /** Increment to fly the map to the current work location (address / reset). */
   recenterSignal: number;
   /** Region bounds to fit when the selected state changes (national). */
@@ -59,8 +57,6 @@ const ZIP_FILL = "zip-fill";
 const ISO_LINE = "iso-line";
 const ZIP_SELECTED = "zip-selected";
 const ZIP_PINNED = "zip-pinned";
-const CTX_SOURCE = "iso-context";
-const CTX_LINE = "iso-context-line";
 
 /** Brand-badge pin element with an A/B label (016 R1). */
 function makePinElement(label: string): { el: HTMLDivElement; badge: HTMLSpanElement } {
@@ -113,7 +109,6 @@ export default function MapView({
   onWorkChange,
   work2,
   onWork2Change,
-  contextOutlines,
   recenterSignal,
   fitBbox,
   fitInitialBounds,
@@ -233,7 +228,6 @@ export default function MapView({
       loaded.current = true;
       syncZips();
       syncIsochrone();
-      syncContext();
     });
     map.current = m;
     return () => {
@@ -309,16 +303,19 @@ export default function MapView({
     });
   }
 
-  // Commute isochrone overlay (the work pin is managed separately).
+  // Commute isochrone overlay (the work pin is managed separately). A null
+  // overlay CLEARS the source — leaving stale bands painted while a dual-pin
+  // intersection recomputes made the display read as a union (016 fix).
   function syncIsochrone() {
     const m = map.current;
     const data = isochroneRef.current;
-    if (!m || !loaded.current || !data) return;
+    if (!m || !loaded.current) return;
     const existing = m.getSource(ISO_SOURCE) as maplibregl.GeoJSONSource | undefined;
     if (existing) {
-      existing.setData(data as never);
+      existing.setData((data ?? { type: "FeatureCollection", features: [] }) as never);
       return;
     }
+    if (!data) return;
     m.addSource(ISO_SOURCE, { type: "geojson", data: data as never });
     // Outline-only (no fill) per departure scenario, so the map below stays
     // readable; kept beneath the basemap labels.
@@ -331,37 +328,6 @@ export default function MapView({
         type: "line",
         source: ISO_SOURCE,
         paint: { "line-color": lineColor as never, "line-width": 2 },
-      },
-      firstSymbolLayerId(m),
-    );
-  }
-
-  // Dual-mode context rings (016 R3): each pin's outer reach, faint + dashed.
-  const contextRef = useRef(contextOutlines);
-  contextRef.current = contextOutlines;
-  function syncContext() {
-    const m = map.current;
-    if (!m || !loaded.current) return;
-    const data = contextRef.current;
-    const existing = m.getSource(CTX_SOURCE) as maplibregl.GeoJSONSource | undefined;
-    const emptyFc = { type: "FeatureCollection", features: [] };
-    if (existing) {
-      existing.setData((data ?? emptyFc) as never);
-      return;
-    }
-    if (!data) return;
-    m.addSource(CTX_SOURCE, { type: "geojson", data: data as never });
-    m.addLayer(
-      {
-        id: CTX_LINE,
-        type: "line",
-        source: CTX_SOURCE,
-        paint: {
-          "line-color": "#6b7686",
-          "line-width": 1.5,
-          "line-opacity": 0.35,
-          "line-dasharray": [2, 2],
-        },
       },
       firstSymbolLayerId(m),
     );
@@ -398,7 +364,6 @@ export default function MapView({
   // Re-sync layers when data arrives.
   useEffect(syncZips, [geojson]);
   useEffect(syncIsochrone, [isochrone]);
-  useEffect(syncContext, [contextOutlines]);
 
   // Track selection/pin changes on the outline layers.
   useEffect(() => {

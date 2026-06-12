@@ -79,9 +79,3 @@ export function intersectIsochrones(
     empty: features.length === 0,
   };
 }
-
-/** The outermost (first) band of an isochrone — the backend orders bands
- * outer→inner — used for the dashed per-pin context rings (016 R3). */
-export function outermostBand(fc: FeatureCollection): Feature | null {
-  return fc.features.length > 0 ? fc.features[0] : null;
-}

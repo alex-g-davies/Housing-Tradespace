@@ -27,10 +27,13 @@ context ring. The detail panel shows commute estimates to both workplaces.
   drive; single∩single for walk/cycle). The intersection renders with the
   standard band styling; the reach line in the detail panel evaluates
   against the intersection.
-- **R3 — Context + empty state.** Each pin's outermost band renders as a
-  faint dashed outline for context. When no band survives the
-  intersection, a visible message says so ("No area within both commutes —
-  try a longer time or move a pin").
+- **R3 — Intersection-only display + empty state.** Dual mode renders ONLY
+  the intersection bands (per-pin context rings were removed by user
+  direction — they read as a union). Stale bands are never left painted: a
+  pin move clears the previous contour until the fresh intersection is
+  ready (the "Updating reach…" chip covers the gap). When no band survives,
+  a visible message says so ("No area within both commutes — try a longer
+  time or move a pin").
 - **R4 — Dual commute estimates.** Selecting a ZIP shows estimate blocks
   for Work A and Work B (compact form — no departure-window parentheticals
   in dual mode). Single-pin display is unchanged.
@@ -57,9 +60,9 @@ context ring. The detail panel shows commute estimates to both workplaces.
 
 ## Acceptance Criteria
 
-- [ ] Add pin B across town: bands shrink to the shared area in standard
-      styling, dashed rings show each pin's own reach; remove B → single
-      mode restored exactly.
+- [ ] Add pin B across town: ONLY the intersection bands render in standard
+      styling; moving a pin never leaves stale bands painted; remove B →
+      single mode restored exactly.
 - [ ] Drag pins apart until nothing overlaps → the empty-intersection
       message appears; bands return when they overlap again.
 - [ ] Selected ZIP shows compact A and B estimate blocks; reach line
