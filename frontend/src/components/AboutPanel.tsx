@@ -86,7 +86,7 @@ export default function AboutPanel({ onShowIntro }: Props) {
             <p className="about__foot">
               Code AGPL-3.0 ·{" "}
               <a
-                href="https://github.com/alex-g-davies/Housing-Tradespace"
+                href="https://github.com/alex-g-davies/LiveNear"
                 target="_blank"
                 rel="noopener noreferrer"
               >
